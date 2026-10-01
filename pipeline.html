@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}Pipeline - wh{% endblock %}
+{% block content %}
+  <h1>Pipeline</h1>
+  <p class="subtle">
+    These jobs only cover steps that read/write Supabase directly (enrichment, scoring).
+    Raw-file ingestion (normalize/combine/import from freshly downloaded county or
+    Propwire exports) still has to be run locally -- see README.
+  </p>
+
+  <p class="warn">
+    Job wiring is a placeholder in this first version: clicking "Run" creates a
+    tracked run row but does not yet execute real enrichment logic. See README
+    Phase 2 to connect each job to its script.
+  </p>
+
+  <table class="data">
+    <thead><tr><th>Job</th><th></th></tr></thead>
+    <tbody>
+      {% for key, label in jobs.items() %}
+      <tr>
+        <td>{{ label }}</td>
+        <td>
+          <form method="post" action="/pipeline/run/{{ key }}" class="inline-form">
+            <button type="submit">Run</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <h2>Recent runs</h2>
+  {% if runs %}
+  <table class="data">
+    <thead><tr><th>Started</th><th>Job</th><th>Status</th><th>Progress</th><th>Note</th></tr></thead>
+    <tbody>
+      {% for r in runs %}
+      <tr>
+        <td>{{ r.started_at }}</td>
+        <td>{{ r.params.label if r.params else r.job_type }}</td>
+        <td>{{ r.status }}</td>
+        <td>{{ r.processed_items }}/{{ r.total_items }}</td>
+        <td class="subtle">{{ r.params.note if r.params and r.params.note else "" }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="subtle">No runs yet.</p>
+  {% endif %}
+{% endblock %}

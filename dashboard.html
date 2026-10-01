@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}Dashboard - wh{% endblock %}
+{% block content %}
+  <h1>{{ total_properties }} properties</h1>
+  <p class="subtle">{{ total_vacancy_checks }} vacancy checks on file across all states.</p>
+
+  <table class="data">
+    <thead>
+      <tr>
+        <th>State</th>
+        <th>Total</th>
+        <th>Has value</th>
+        <th>Has ARV</th>
+        <th>Has real equity</th>
+        <th>Has sqft</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for state, d in by_state.items() %}
+      <tr>
+        <td><a href="/leads?state={{ state }}">{{ state }}</a></td>
+        <td>{{ d.total }}</td>
+        <td>{{ d.with_value }}</td>
+        <td>{{ d.with_arv }}</td>
+        <td>{{ d.with_real_equity }}</td>
+        <td>{{ d.with_sqft }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <h2>Deal stages</h2>
+  {% if stage_counts %}
+  <table class="data">
+    <thead><tr><th>Stage</th><th>Count</th></tr></thead>
+    <tbody>
+      {% for stage, count in stage_counts.items() %}
+      <tr><td>{{ stage }}</td><td>{{ count }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="subtle">No leads have a deal stage set yet -- open a lead and set one to get started.</p>
+  {% endif %}
+{% endblock %}

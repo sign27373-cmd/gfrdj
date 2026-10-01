@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+{% block title %}{{ prop.address_line or "Lead" }} - wh{% endblock %}
+{% block content %}
+  <a href="/leads" class="back">&laquo; Back to leads</a>
+  <h1>{{ prop.address_line or "(no address)" }}</h1>
+  <p class="subtle">{{ prop.city }}, {{ prop.state }} {{ prop.zip or "" }} &middot; parcel {{ prop.parcel_id or "unknown" }}</p>
+
+  <section class="grid-2">
+    <div>
+      <h2>Property</h2>
+      <table class="kv">
+        <tr><th>Property use</th><td>{{ prop.property_use or "unknown" }}</td></tr>
+        <tr><th>Living sqft</th><td>{{ prop.living_sqft or "unknown" }}</td></tr>
+        <tr><th>Assessed value</th><td>{{ "${:,.0f}".format(prop.assessed_value) if prop.assessed_value else "unknown" }}</td></tr>
+        <tr><th>Market value</th><td>{{ "${:,.0f}".format(prop.market_value_estimate) if prop.market_value_estimate else "unknown" }}</td></tr>
+        <tr><th>ARV estimate</th><td>
+          {% if prop.arv_estimate %}
+            {{ "${:,.0f}".format(prop.arv_estimate) }}
+            <span class="subtle">({{ prop.arv_method }}, {{ prop.arv_comp_count }} comps)</span>
+          {% else %}unknown{% endif %}
+        </td></tr>
+        <tr><th>Estimated equity</th><td>
+          {{ "${:,.0f}".format(prop.estimated_equity) if prop.estimated_equity is not none else "unknown -- no confirmed loan balance for this lead" }}
+        </td></tr>
+        <tr><th>Status</th><td>{{ prop.status }}</td></tr>
+      </table>
+    </div>
+
+    <div>
+      <h2>Owner{{ "s" if owners|length != 1 else "" }}</h2>
+      {% if owners %}
+        {% for o in owners %}
+        <table class="kv">
+          <tr><th>Name</th><td>{{ o.full_name or "unknown" }}</td></tr>
+          <tr><th>Type</th><td>{{ o.entity_type }}</td></tr>
+          <tr><th>Mailing address</th><td>{{ o.mailing_address or "" }} {{ o.mailing_city or "" }} {{ o.mailing_state or "" }} {{ o.mailing_zip or "" }}</td></tr>
+        </table>
+        {% endfor %}
+      {% else %}
+        <p class="subtle">No owner on file.</p>
+      {% endif %}
+    </div>
+  </section>
+
+  <section>
+    <h2>Vacancy check</h2>
+    {% if vacancy_checks %}
+      {% set vc = vacancy_checks[0] %}
+      <p>
+        Likely vacant: <strong>{{ "yes" if vc.likely_vacant else ("no" if vc.likely_vacant is not none else "not scored") }}</strong>
+        &middot; checked {{ vc.checked_at }}
+      </p>
+      {% if photo_url %}
+        <img class="street-photo" src="{{ photo_url }}" alt="Street View photo" onerror="this.style.display='none'">
+      {% elif vc.image_url and "google.com/maps" not in vc.image_url %}
+        <img class="street-photo" src="{{ vc.image_url }}" alt="Street View photo">
+      {% else %}
+        <p class="subtle">No photo found in the bucket for this address.</p>
+      {% endif %}
+      {% if vc.image_url and "google.com/maps" in vc.image_url %}
+        <p><a href="{{ vc.image_url }}" target="_blank" rel="noopener">Open Street View &rarr;</a></p>
+      {% endif %}
+    {% else %}
+      <p class="subtle">No vacancy check on file for this property yet.</p>
+    {% endif %}
+  </section>
+
+  <section>
+    <h2>Deal stage</h2>
+    <form method="post" action="/leads/{{ prop.id }}/stage" class="inline-form">
+      <select name="stage">
+        {% for s in deal_stages %}
+        <option value="{{ s }}" {% if deal and deal.stage == s %}selected{% endif %}>{{ s }}</option>
+        {% endfor %}
+      </select>
+      <button type="submit">Save stage</button>
+    </form>
+  </section>
+
+  <section>
+    <h2>Contact log</h2>
+    <form method="post" action="/leads/{{ prop.id }}/log" class="inline-form">
+      <select name="channel">
+        <option value="call">Call</option>
+        <option value="text">Text</option>
+        <option value="email">Email</option>
+        <option value="mail">Mail</option>
+        <option value="in_person">In person</option>
+        <option value="other">Other</option>
+      </select>
+      <select name="outcome">
+        <option value="">Outcome...</option>
+        <option value="no_answer">No answer</option>
+        <option value="left_voicemail">Left voicemail</option>
+        <option value="wrong_number">Wrong number</option>
+        <option value="not_interested">Not interested</option>
+        <option value="interested">Interested</option>
+        <option value="callback_requested">Callback requested</option>
+        <option value="appointment_set">Appointment set</option>
+        <option value="deal_made">Deal made</option>
+        <option value="other">Other</option>
+      </select>
+      <input type="text" name="notes" placeholder="Notes...">
+      <button type="submit">Add entry</button>
+    </form>
+
+    {% if contact_log %}
+    <table class="data">
+      <thead><tr><th>When</th><th>Channel</th><th>Outcome</th><th>Notes</th></tr></thead>
+      <tbody>
+        {% for c in contact_log %}
+        <tr>
+          <td>{{ c.contacted_at }}</td>
+          <td>{{ c.channel }}</td>
+          <td>{{ c.outcome or "" }}</td>
+          <td>{{ c.notes or "" }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p class="subtle">No contact attempts logged yet.</p>
+    {% endif %}
+  </section>
+{% endblock %}

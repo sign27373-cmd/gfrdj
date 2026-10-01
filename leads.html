@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block title %}Leads - wh{% endblock %}
+{% block content %}
+  <h1>Leads</h1>
+  <p class="subtle">{{ total }} matching leads</p>
+
+  <form class="filters" method="get" action="/leads">
+    <select name="state">
+      <option value="">All states</option>
+      {% for s in ["NV", "WA", "TN"] %}
+      <option value="{{ s }}" {% if state == s %}selected{% endif %}>{{ s }}</option>
+      {% endfor %}
+    </select>
+    <input type="text" name="property_use" placeholder="Property use contains..." value="{{ property_use }}">
+    <input type="text" name="city" placeholder="City contains..." value="{{ city }}">
+    <input type="text" name="search" placeholder="Address or parcel ID..." value="{{ search }}">
+    <select name="sort">
+      {% for key, label in sort_columns.items() %}
+      <option value="{{ key }}" {% if sort == key %}selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+    <select name="direction">
+      <option value="desc" {% if direction == "desc" %}selected{% endif %}>High to low</option>
+      <option value="asc" {% if direction == "asc" %}selected{% endif %}>Low to high</option>
+    </select>
+    <button type="submit">Filter</button>
+  </form>
+
+  <table class="data">
+    <thead>
+      <tr>
+        <th>Address</th>
+        <th>State</th>
+        <th>Property use</th>
+        <th>Assessed</th>
+        <th>Market</th>
+        <th>ARV</th>
+        <th>Equity (known)</th>
+        <th>Sqft</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for l in leads %}
+      <tr>
+        <td><a href="/leads/{{ l.id }}">{{ l.address_line or "(no address)" }}</a><br>
+            <span class="subtle">{{ l.city }}, {{ l.state }} {{ l.zip or "" }}</span></td>
+        <td>{{ l.state }}</td>
+        <td>{{ l.property_use or "" }}</td>
+        <td>{{ "${:,.0f}".format(l.assessed_value) if l.assessed_value else "" }}</td>
+        <td>{{ "${:,.0f}".format(l.market_value_estimate) if l.market_value_estimate else "" }}</td>
+        <td>{{ "${:,.0f}".format(l.arv_estimate) if l.arv_estimate else "" }}</td>
+        <td>{{ "${:,.0f}".format(l.estimated_equity) if l.estimated_equity is not none else "unknown" }}</td>
+        <td>{{ l.living_sqft or "" }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <div class="pager">
+    {% set base_qs = "state=" + state + "&property_use=" + property_use + "&city=" + city + "&search=" + search + "&sort=" + sort + "&direction=" + direction %}
+    {% if page > 1 %}
+      <a href="/leads?{{ base_qs }}&page={{ page - 1 }}">&laquo; Previous</a>
+    {% endif %}
+    <span class="subtle">Page {{ page }} of {{ total_pages }}</span>
+    {% if page < total_pages %}
+      <a href="/leads?{{ base_qs }}&page={{ page + 1 }}">Next &raquo;</a>
+    {% endif %}
+  </div>
+{% endblock %}
