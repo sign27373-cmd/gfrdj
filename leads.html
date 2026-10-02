@@ -3,6 +3,7 @@
 {% macro m(v) %}{{ "${:,.0f}".format(v) if v is not none else "" }}{% endmacro %}
 {% macro th(col, label, cls="") %}<th class="{{ cls }}"><a href="/leads?{{ sort_qs }}{{ '&' if sort_qs }}sort={{ col }}&direction={{ 'asc' if sort == col and direction == 'desc' else 'desc' }}">{{ label }}{% if sort == col %} {{ '▼' if direction == 'desc' else '▲' }}{% endif %}</a></th>{% endmacro %}
 {% macro step(name, label) %}<div class="st"><small>{{ label }}</small><div class="stp"><button type="button" data-d="-25000" aria-label="minus 25 thousand">&minus;</button><input type="number" name="{{ name }}" step="25000" min="0" placeholder="Any" value="{{ qp.get(name,'') }}"><button type="button" data-d="25000" aria-label="plus 25 thousand">+</button></div></div>{% endmacro %}
+{% macro links(p) %}{% set full = [p.address_line, p.city, p.state, p.zip]|select|join(' ') %}{% if p.address_line %}<span class="links"><a href="https://www.google.com/search?q={{ full|urlencode }}" target="_blank" rel="noopener">Google</a><a href="https://www.google.com/maps/search/?api=1&query={{ full|urlencode }}" target="_blank" rel="noopener">Maps</a><a href="https://www.zillow.com/homes/{{ full|replace(',', '')|replace(' ', '-')|urlencode }}_rb/" target="_blank" rel="noopener">Zillow</a></span>{% endif %}{% endmacro %}
 {% block content %}
 <form class="filters" id="ff" method="get" action="/leads">
   <input type="hidden" name="sort" value="{{ sort }}"><input type="hidden" name="direction" value="{{ direction }}">
@@ -71,11 +72,11 @@
   <tbody>
   {% for l in leads %}
   <tr>
-    <td class="prop">
+    <td class="prop"><div class="pw">
       <a href="/leads/{{ l.id }}" class="th">{% if l.photo %}<img src="{{ l.photo }}" loading="lazy" alt="" onerror="this.replaceWith(document.createTextNode('no photo'))">{% else %}no photo{% endif %}</a>
       <div class="ad"><a href="/leads/{{ l.id }}">{{ l.address_line or l.address_note or "(no address)" }}</a>
-        <span class="subtle"><span class="st-{{ l.state }}">{{ l.state }}</span> &middot; {{ l.city or "" }} {{ l.zip or "" }}</span></div>
-    </td>
+        <span class="subtle"><span class="st-{{ l.state }}">{{ l.state }}</span> &middot; {{ l.city or "" }} {{ l.zip or "" }}</span>{{ links(l) }}</div>
+    </div></td>
     <td>{% if l.auction_date %}{{ l.auction_date[:10] }}{% if l.days_to_auction is not none %} <span class="badge {{ 'hot' if 0 <= l.days_to_auction <= 14 else 'past' if l.days_to_auction < 0 }}">{{ l.days_to_auction }}d</span>{% endif %}{% endif %}</td>
     <td class="num">{{ m(l.assessed_value) }}</td>
     <td class="num">{{ m(l.arv_estimate) }}{% if l.arv_method %} <span class="dot dot-{{ l.arv_method }}" title="ARV from {{ l.arv_method }} comps"></span>{% endif %}</td>
