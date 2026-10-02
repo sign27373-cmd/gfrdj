@@ -5,6 +5,16 @@
   <h1>{{ prop.address_line or "(no address)" }}</h1>
   <p class="subtle">{{ prop.city }}, {{ prop.state }} {{ prop.zip or "" }} &middot; parcel {{ prop.parcel_id or "unknown" }}</p>
 
+  <form method="post" action="/leads/{{ prop.id }}/stage" class="stagebar">
+    <span class="subtle">Deal stage</span>
+    <select name="stage">
+      {% for s in deal_stages %}
+      <option value="{{ s }}" {% if deal and deal.stage == s %}selected{% endif %}>{{ s }}</option>
+      {% endfor %}
+    </select>
+    <button type="submit">Save stage</button>
+  </form>
+
   <section class="grid-2">
     <div>
       <h2>Property</h2>
@@ -63,18 +73,6 @@
     {% else %}
       <p class="subtle">No vacancy check on file for this property yet.</p>
     {% endif %}
-  </section>
-
-  <section>
-    <h2>Deal stage</h2>
-    <form method="post" action="/leads/{{ prop.id }}/stage" class="inline-form">
-      <select name="stage">
-        {% for s in deal_stages %}
-        <option value="{{ s }}" {% if deal and deal.stage == s %}selected{% endif %}>{{ s }}</option>
-        {% endfor %}
-      </select>
-      <button type="submit">Save stage</button>
-    </form>
   </section>
 
   <section>
