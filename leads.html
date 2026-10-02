@@ -1,90 +1,87 @@
 {% extends "base.html" %}
 {% block title %}Leads - wh{% endblock %}
 {% macro m(v) %}{{ "${:,.0f}".format(v) if v is not none else "" }}{% endmacro %}
-{% macro th(col, label, cls="") %}
-<th class="{{ cls }}"><a href="/leads?{{ sort_qs }}{{ '&' if sort_qs }}sort={{ col }}&direction={{ 'asc' if sort == col and direction == 'desc' else 'desc' }}">{{ label }}{% if sort == col %} {{ '▼' if direction == 'desc' else '▲' }}{% endif %}</a></th>
-{% endmacro %}
+{% macro th(col, label, cls="") %}<th class="{{ cls }}"><a href="/leads?{{ sort_qs }}{{ '&' if sort_qs }}sort={{ col }}&direction={{ 'asc' if sort == col and direction == 'desc' else 'desc' }}">{{ label }}{% if sort == col %} {{ '▼' if direction == 'desc' else '▲' }}{% endif %}</a></th>{% endmacro %}
+{% macro step(name, label) %}<div class="st"><small>{{ label }}</small><div class="stp"><button type="button" data-d="-25000" aria-label="minus 25 thousand">&minus;</button><input type="number" name="{{ name }}" step="25000" min="0" placeholder="Any" value="{{ qp.get(name,'') }}"><button type="button" data-d="25000" aria-label="plus 25 thousand">+</button></div></div>{% endmacro %}
 {% block content %}
-<div class="stats">
-  <div><b>{{ "{:,}".format(total) }}</b><span>matching leads</span></div>
-  <div><b class="hot">{{ soon }}</b><span>auctions in 14 days</span></div>
-  <button type="button" id="togglePanel" class="ghost">Filters</button>
-</div>
+<form class="filters" id="ff" method="get" action="/leads">
+  <input type="hidden" name="sort" value="{{ sort }}"><input type="hidden" name="direction" value="{{ direction }}">
+  <div class="frow">
+    <input type="text" name="q" class="search" placeholder="Search address or parcel ID" value="{{ qp.get('q','') }}">
+    <button type="submit">Apply</button>
+  </div>
+  <div class="frow">
+    {% for s in ["NV","WA","TN"] %}<label class="pill"><input class="auto" type="checkbox" name="state" value="{{ s }}" {{ 'checked' if s in states }}><span>{{ s }}</span></label>{% endfor %}
+    <span class="gap"></span>
+    <label class="pill"><input class="auto" type="radio" name="lead_type" value="" {{ 'checked' if not qp.get('lead_type') }}><span>All leads</span></label>
+    <label class="pill"><input class="auto" type="radio" name="lead_type" value="pre_foreclosure" {{ 'checked' if qp.get('lead_type') == 'pre_foreclosure' }}><span>Pre-foreclosure</span></label>
+  </div>
+  <details class="grp" open><summary>Value</summary>
+    <div class="frow quick">
+      <button type="button" class="chipbtn" data-min="" data-max="200000">Under $200k</button>
+      <button type="button" class="chipbtn" data-min="200000" data-max="400000">$200&ndash;400k</button>
+      <button type="button" class="chipbtn" data-min="400000" data-max="600000">$400&ndash;600k</button>
+      <button type="button" class="chipbtn" data-min="600000" data-max="">$600k+</button>
+      <small class="subtle">assessed value</small>
+    </div>
+    <div class="sg">
+      {{ step('min_assessed', 'Assessed value, min') }}{{ step('max_assessed', 'Assessed value, max') }}
+      {{ step('min_arv', 'ARV, min') }}{{ step('max_arv', 'ARV, max') }}
+      {{ step('min_equity', 'Equity, min') }}{{ step('max_equity', 'Equity, max') }}
+    </div>
+  </details>
+  <details class="grp" open><summary>Auction within</summary>
+    <div class="frow">
+      {% for n in ["", "7", "14", "30", "60"] %}<label class="pill big"><input class="auto" type="radio" name="auction_within" value="{{ n }}" {{ 'checked' if (qp.get('auction_within','') == n) }}><span>{{ (n ~ ' days') if n else 'Any time' }}</span></label>{% endfor %}
+    </div>
+  </details>
+  <details class="grp"><summary>More filters</summary>
+    <div class="sg">
+      <div class="st"><small>County</small><input name="county" value="{{ qp.get('county','') }}"></div>
+      <div class="st"><small>City</small><input name="city" value="{{ qp.get('city','') }}"></div>
+      <div class="st"><small>Zip</small><input name="zip" value="{{ qp.get('zip','') }}"></div>
+      <div class="st"><small>Subdivision</small><input name="subdivision" value="{{ qp.get('subdivision','') }}"></div>
+      <div class="st"><small>Sqft, min</small><input name="min_sqft" value="{{ qp.get('min_sqft','') }}"></div>
+      <div class="st"><small>Sqft, max</small><input name="max_sqft" value="{{ qp.get('max_sqft','') }}"></div>
+      <div class="st"><small>Owed in default, min (foreclosures)</small><input name="min_default" value="{{ qp.get('min_default','') }}"></div>
+      <div class="st"><small>Owed in default, max (foreclosures)</small><input name="max_default" value="{{ qp.get('max_default','') }}"></div>
+    </div>
+    <div class="frow" style="margin-top:8px">
+      {% for g in use_groups %}<label class="pill"><input type="checkbox" name="use_group" value="{{ g }}" {{ 'checked' if g in groups }}><span>{{ g }}</span></label>{% endfor %}
+    </div>
+    <div class="frow" style="margin-top:8px">
+      <label class="pill"><input type="checkbox" name="has_arv" value="1" {{ 'checked' if qp.get('has_arv') == '1' }}><span>Has ARV</span></label>
+      <label class="pill"><input type="checkbox" name="show_incomplete" value="1" {{ 'checked' if qp.get('show_incomplete') == '1' }}><span>Show rows with no address</span></label>
+      <select name="owner_occupied" class="sel"><option value="">Owner-occupied: any</option><option value="true" {{ 'selected' if qp.get('owner_occupied') == 'true' }}>Yes</option><option value="false" {{ 'selected' if qp.get('owner_occupied') == 'false' }}>No</option></select>
+      <select name="per" class="sel">{% for n in per_choices %}<option value="{{ n }}" {{ 'selected' if per == n }}>{{ n }} per page</option>{% endfor %}</select>
+    </div>
+  </details>
+</form>
 
 <div class="tabs">
   {% for label, qs in presets %}<a href="/leads{{ '?' + qs if qs }}" class="{{ 'on' if request.url.query == qs }}">{{ label }}</a>{% endfor %}
+  <span class="count"><b>{{ "{:,}".format(total) }}</b> leads &middot; <b class="hot">{{ soon }}</b> auctions in 14 days</span>
 </div>
-
 {% if chips %}<div class="chips">{% for label, url in chips %}<a href="{{ url }}">{{ label }} &times;</a>{% endfor %}<a href="/leads" class="clear">clear all</a></div>{% endif %}
 
-<div class="layout">
-<form class="side" id="panel" method="get" action="/leads">
-  <input type="hidden" name="sort" value="{{ sort }}"><input type="hidden" name="direction" value="{{ direction }}">
-  <input type="text" name="q" placeholder="Address or parcel ID" value="{{ qp.get('q','') }}">
-  <details open><summary>Lead</summary>
-    <select name="lead_type"><option value="">All lead types</option>
-      <option value="pre_foreclosure" {{ 'selected' if qp.get('lead_type') == 'pre_foreclosure' }}>Pre-foreclosure</option>
-      <option value="other" {{ 'selected' if qp.get('lead_type') == 'other' }}>Other</option></select>
-    <label>Auction within (days)</label><input type="number" name="auction_within" value="{{ qp.get('auction_within','') }}">
-    <label>Min / max in default</label><div class="pair"><input name="min_default" value="{{ qp.get('min_default','') }}"><input name="max_default" value="{{ qp.get('max_default','') }}"></div>
-    <label>Min / max opening bid</label><div class="pair"><input name="min_bid" value="{{ qp.get('min_bid','') }}"><input name="max_bid" value="{{ qp.get('max_bid','') }}"></div>
-    <label>Bid % of ARV (min / max)</label><div class="pair"><input name="min_bidpct" value="{{ qp.get('min_bidpct','') }}"><input name="max_bidpct" value="{{ qp.get('max_bidpct','') }}"></div>
-  </details>
-  <details open><summary>Location</summary>
-    {% for s in ["NV","WA","TN"] %}<label class="chk"><input type="checkbox" name="state" value="{{ s }}" {{ 'checked' if s in states }}> {{ s }}</label>{% endfor %}
-    <input name="county" placeholder="County" value="{{ qp.get('county','') }}">
-    <input name="city" placeholder="City" value="{{ qp.get('city','') }}">
-    <input name="zip" placeholder="Zip" value="{{ qp.get('zip','') }}">
-    <input name="subdivision" placeholder="Subdivision" value="{{ qp.get('subdivision','') }}">
-  </details>
-  <details open><summary>Value</summary>
-    <label>Assessed (min / max)</label><div class="pair"><input name="min_assessed" value="{{ qp.get('min_assessed','') }}"><input name="max_assessed" value="{{ qp.get('max_assessed','') }}"></div>
-    <label>Market (min / max)</label><div class="pair"><input name="min_market" value="{{ qp.get('min_market','') }}"><input name="max_market" value="{{ qp.get('max_market','') }}"></div>
-    <label>ARV (min / max)</label><div class="pair"><input name="min_arv" value="{{ qp.get('min_arv','') }}"><input name="max_arv" value="{{ qp.get('max_arv','') }}"></div>
-    <label>Equity $ (min / max)</label><div class="pair"><input name="min_equity" value="{{ qp.get('min_equity','') }}"><input name="max_equity" value="{{ qp.get('max_equity','') }}"></div>
-    <label>Equity % (min / max)</label><div class="pair"><input name="min_eqpct" value="{{ qp.get('min_eqpct','') }}"><input name="max_eqpct" value="{{ qp.get('max_eqpct','') }}"></div>
-  </details>
-  <details><summary>Property</summary>
-    {% for g in use_groups %}<label class="chk"><input type="checkbox" name="use_group" value="{{ g }}" {{ 'checked' if g in groups }}> {{ g }}</label>{% endfor %}
-    <label>Sqft (min / max)</label><div class="pair"><input name="min_sqft" value="{{ qp.get('min_sqft','') }}"><input name="max_sqft" value="{{ qp.get('max_sqft','') }}"></div>
-    <select name="owner_occupied"><option value="">Owner-occupied: any</option>
-      <option value="true" {{ 'selected' if qp.get('owner_occupied') == 'true' }}>Yes</option>
-      <option value="false" {{ 'selected' if qp.get('owner_occupied') == 'false' }}>No</option></select>
-    <label class="chk"><input type="checkbox" name="has_arv" value="1" {{ 'checked' if qp.get('has_arv') == '1' }}> Has ARV</label>
-    <label class="chk"><input type="checkbox" name="show_incomplete" value="1" {{ 'checked' if qp.get('show_incomplete') == '1' }}> Show rows with no address</label>
-  </details>
-  <select name="per">{% for n in per_choices %}<option value="{{ n }}" {{ 'selected' if per == n }}>{{ n }} per page</option>{% endfor %}</select>
-  <button type="submit">Apply filters</button>
-</form>
-
-<div class="tablewrap">
-<table class="data dense">
+<table class="data leadtable">
   <thead><tr>
-    <th>Address</th><th>St</th><th>Type</th>
-    {{ th('auction_date', 'Auction') }}
-    {{ th('assessed_value', 'Assessed', 'num') }}{{ th('market_value_estimate', 'Market', 'num') }}{{ th('arv_estimate', 'ARV', 'num') }}
-    {{ th('estimated_equity', 'Equity', 'num') }}{{ th('equity_pct', 'Eq %', 'num') }}
-    {{ th('opening_bid', 'Bid', 'num') }}{{ th('bid_pct_arv', 'Bid/ARV', 'num') }}{{ th('amount_in_default', 'Default', 'num') }}{{ th('living_sqft', 'Sqft', 'num') }}
+    <th>Property</th>{{ th('auction_date', 'Auction') }}{{ th('assessed_value', 'Assessed', 'num') }}{{ th('arv_estimate', 'ARV', 'num') }}{{ th('estimated_equity', 'Equity', 'num') }}
   </tr></thead>
   <tbody>
   {% for l in leads %}
   <tr>
-    <td class="addr"><a href="/leads/{{ l.id }}">{{ l.address_line or l.address_note or "(no address)" }}</a>
-      <span class="subtle">{{ l.city or "" }} {{ l.zip or "" }} · {{ l.use_group }}</span></td>
-    <td><span class="badge st-{{ l.state }}">{{ l.state }}</span></td>
-    <td>{% if l.lead_type == 'pre_foreclosure' %}<span class="badge pf">PF</span>{% endif %}</td>
+    <td class="prop">
+      <a href="/leads/{{ l.id }}" class="th">{% if l.photo %}<img src="{{ l.photo }}" loading="lazy" alt="" onerror="this.replaceWith(document.createTextNode('no photo'))">{% else %}no photo{% endif %}</a>
+      <div class="ad"><a href="/leads/{{ l.id }}">{{ l.address_line or l.address_note or "(no address)" }}</a>
+        <span class="subtle"><span class="st-{{ l.state }}">{{ l.state }}</span> &middot; {{ l.city or "" }} {{ l.zip or "" }}</span></div>
+    </td>
     <td>{% if l.auction_date %}{{ l.auction_date[:10] }}{% if l.days_to_auction is not none %} <span class="badge {{ 'hot' if 0 <= l.days_to_auction <= 14 else 'past' if l.days_to_auction < 0 }}">{{ l.days_to_auction }}d</span>{% endif %}{% endif %}</td>
     <td class="num">{{ m(l.assessed_value) }}</td>
-    <td class="num">{{ m(l.market_value_estimate) }}</td>
     <td class="num">{{ m(l.arv_estimate) }}{% if l.arv_method %} <span class="dot dot-{{ l.arv_method }}" title="ARV from {{ l.arv_method }} comps"></span>{% endif %}</td>
-    <td class="num">{{ m(l.estimated_equity) }}</td>
-    <td class="num">{{ l.equity_pct ~ '%' if l.equity_pct is not none }}</td>
-    <td class="num">{{ m(l.opening_bid) }}</td>
-    <td class="num">{{ l.bid_pct_arv ~ '%' if l.bid_pct_arv is not none }}</td>
-    <td class="num">{{ m(l.amount_in_default) }}</td>
-    <td class="num">{{ l.living_sqft or "" }}</td>
+    <td class="num">{{ m(l.estimated_equity) }}{% if l.equity_pct is not none %}<small class="subtle"> {{ l.equity_pct }}%</small>{% endif %}</td>
   </tr>
-  {% else %}<tr><td colspan="13" class="subtle">No leads match these filters.</td></tr>
+  {% else %}<tr><td colspan="5" class="subtle">No leads match these filters.</td></tr>
   {% endfor %}
   </tbody>
 </table>
@@ -93,7 +90,15 @@
   <span class="subtle">Page {{ page }} of {{ total_pages }}</span>
   {% if page < total_pages %}<a href="/leads?{{ page_qs }}{{ '&' if page_qs }}page={{ page + 1 }}">Next &raquo;</a>{% endif %}
 </div>
-</div>
-</div>
-<script>document.getElementById('togglePanel').onclick=function(){document.getElementById('panel').classList.toggle('hidden')}</script>
+<script>
+var ff=document.getElementById('ff');
+ff.addEventListener('change',function(e){if(e.target.classList.contains('auto'))ff.submit()});
+ff.addEventListener('click',function(e){
+  var b=e.target.closest('.stp button');
+  if(b){var i=b.parentNode.querySelector('input'),v=i.value===''?null:+i.value,d=+b.dataset.d;
+    if(v===null&&d<0)return;i.value=Math.max(0,(v||0)+d);return}
+  var c=e.target.closest('.chipbtn');
+  if(c){ff.elements.min_assessed.value=c.dataset.min;ff.elements.max_assessed.value=c.dataset.max;ff.submit()}
+});
+</script>
 {% endblock %}
