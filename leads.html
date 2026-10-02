@@ -1,69 +1,48 @@
-{% extends "base.html" %}
-{% block title %}Leads - wh{% endblock %}
-{% block content %}
-  <h1>Leads</h1>
-  <p class="subtle">{{ total }} matching leads</p>
-
-  <form class="filters" method="get" action="/leads">
-    <select name="state">
-      <option value="">All states</option>
-      {% for s in ["NV", "WA", "TN"] %}
-      <option value="{{ s }}" {% if state == s %}selected{% endif %}>{{ s }}</option>
-      {% endfor %}
-    </select>
-    <input type="text" name="property_use" placeholder="Property use contains..." value="{{ property_use }}">
-    <input type="text" name="city" placeholder="City contains..." value="{{ city }}">
-    <input type="text" name="search" placeholder="Address or parcel ID..." value="{{ search }}">
-    <select name="sort">
-      {% for key, label in sort_columns.items() %}
-      <option value="{{ key }}" {% if sort == key %}selected{% endif %}>{{ label }}</option>
-      {% endfor %}
-    </select>
-    <select name="direction">
-      <option value="desc" {% if direction == "desc" %}selected{% endif %}>High to low</option>
-      <option value="asc" {% if direction == "asc" %}selected{% endif %}>Low to high</option>
-    </select>
-    <button type="submit">Filter</button>
-  </form>
-
-  <table class="data">
-    <thead>
-      <tr>
-        <th>Address</th>
-        <th>State</th>
-        <th>Property use</th>
-        <th>Assessed</th>
-        <th>Market</th>
-        <th>ARV</th>
-        <th>Equity (known)</th>
-        <th>Sqft</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for l in leads %}
-      <tr>
-        <td><a href="/leads/{{ l.id }}">{{ l.address_line or "(no address)" }}</a><br>
-            <span class="subtle">{{ l.city }}, {{ l.state }} {{ l.zip or "" }}</span></td>
-        <td>{{ l.state }}</td>
-        <td>{{ l.property_use or "" }}</td>
-        <td>{{ "${:,.0f}".format(l.assessed_value) if l.assessed_value else "" }}</td>
-        <td>{{ "${:,.0f}".format(l.market_value_estimate) if l.market_value_estimate else "" }}</td>
-        <td>{{ "${:,.0f}".format(l.arv_estimate) if l.arv_estimate else "" }}</td>
-        <td>{{ "${:,.0f}".format(l.estimated_equity) if l.estimated_equity is not none else "unknown" }}</td>
-        <td>{{ l.living_sqft or "" }}</td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-
-  <div class="pager">
-    {% set base_qs = "state=" + state + "&property_use=" + property_use + "&city=" + city + "&search=" + search + "&sort=" + sort + "&direction=" + direction %}
-    {% if page > 1 %}
-      <a href="/leads?{{ base_qs }}&page={{ page - 1 }}">&laquo; Previous</a>
-    {% endif %}
-    <span class="subtle">Page {{ page }} of {{ total_pages }}</span>
-    {% if page < total_pages %}
-      <a href="/leads?{{ base_qs }}&page={{ page + 1 }}">Next &raquo;</a>
-    {% endif %}
-  </div>
-{% endblock %}
+:root{--bg:#0b0f14;--panel:#121820;--panel2:#18202a;--line:#243040;--ink:#d7e0ea;--subtle:#7d8da0;--accent:#2dd4bf;--hot:#f87171;--warn:#fbbf24}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:13px/1.4 -apple-system,"Segoe UI",Roboto,sans-serif}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+h1,h2,h3{font-weight:600;margin:.4em 0}
+.topbar{display:flex;align-items:center;gap:24px;padding:0 20px;height:44px;background:var(--panel);border-bottom:1px solid var(--line)}
+.brand{font-weight:700;color:var(--accent);font-size:16px}
+.topbar nav a{color:var(--ink);margin-right:18px;opacity:.75}.topbar nav a:hover{opacity:1;text-decoration:none}
+main{padding:16px 20px;max-width:1900px;margin:0 auto}
+.subtle{color:var(--subtle)}.warn{background:#3a2e0b;color:var(--warn);padding:8px 12px;border-radius:6px}
+.back{display:inline-block;margin-bottom:10px}
+input,select,button{font:inherit;color:var(--ink);background:var(--panel2);border:1px solid var(--line);border-radius:5px;padding:6px 8px;width:100%}
+button{background:var(--accent);color:#04201c;font-weight:600;border:0;cursor:pointer;width:auto;padding:7px 14px}
+button.ghost{background:var(--panel2);color:var(--ink);border:1px solid var(--line)}
+.stats{display:flex;gap:28px;align-items:center;margin-bottom:10px}
+.stats div{display:flex;flex-direction:column}.stats b{font:600 22px ui-monospace,Consolas,monospace}.stats .hot{color:var(--hot)}
+.stats span{color:var(--subtle);font-size:11px;text-transform:uppercase;letter-spacing:.05em}.stats .ghost{margin-left:auto}
+.tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+.tabs a{padding:5px 12px;border:1px solid var(--line);border-radius:999px;color:var(--ink)}
+.tabs a.on,.tabs a:hover{background:var(--accent);color:#04201c;text-decoration:none}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+.chips a{background:var(--panel2);border:1px solid var(--line);border-radius:4px;padding:2px 8px;color:var(--ink)}.chips .clear{border:0;background:none;color:var(--subtle)}
+.layout{display:flex;gap:14px;align-items:flex-start}
+.side{width:250px;flex:none;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:12px;display:flex;flex-direction:column;gap:8px}
+.side.hidden{display:none}
+.side details{border-top:1px solid var(--line);padding-top:8px;display:flex;flex-direction:column;gap:6px}
+.side summary{cursor:pointer;font-weight:600;color:var(--subtle);text-transform:uppercase;font-size:11px;letter-spacing:.06em;margin-bottom:6px}
+.side label{color:var(--subtle);font-size:11px;display:block;margin:6px 0 2px}
+.side label.chk{display:flex;gap:6px;align-items:center;color:var(--ink);font-size:13px;margin:3px 0}.side label.chk input{width:auto}
+.pair{display:flex;gap:6px}
+.tablewrap{flex:1;min-width:0;overflow-x:auto}
+table.data{width:100%;border-collapse:collapse;background:var(--panel);border:1px solid var(--line);border-radius:8px}
+table.data th,table.data td{padding:6px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+table.data thead th{position:sticky;top:0;background:var(--panel2);font-size:11px;text-transform:uppercase;letter-spacing:.05em;white-space:nowrap}
+table.data th a{color:var(--subtle)}table.data tbody tr:hover{background:var(--panel2)}
+.dense td{white-space:nowrap}.dense td.addr{white-space:normal;min-width:230px}.dense td.addr span{display:block;font-size:11px}
+.num{text-align:right!important;font-family:ui-monospace,Consolas,monospace}
+.badge{display:inline-block;padding:1px 6px;border-radius:4px;font-size:11px;font-weight:600;background:var(--panel2);border:1px solid var(--line)}
+.badge.pf{color:#c4b5fd;border-color:#5b4b9a}.badge.hot{color:var(--hot);border-color:var(--hot)}.badge.past{color:var(--subtle)}
+.st-NV{color:#60a5fa}.st-WA{color:#34d399}.st-TN{color:#fbbf24}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--subtle)}
+.dot-subdivision{background:#34d399}.dot-zip{background:#fbbf24}.dot-city{background:#f87171}
+.pager{display:flex;gap:16px;align-items:center;padding:12px 0}
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.kv{width:100%;border-collapse:collapse}.kv td{padding:4px 8px;border-bottom:1px solid var(--line)}
+.street-photo{max-width:100%;border-radius:8px;border:1px solid var(--line)}
+.inline-form{display:flex;gap:8px;align-items:center}.inline-form select,.inline-form input{width:auto}
+@media(max-width:900px){.layout{flex-direction:column}.side{width:100%}.grid-2{grid-template-columns:1fr}}
