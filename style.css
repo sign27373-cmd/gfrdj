@@ -42,8 +42,8 @@ table.data{width:100%;border-collapse:collapse;background:var(--panel);border:1p
 table.data th,table.data td{padding:10px 14px;border-bottom:1px solid var(--line);text-align:left;vertical-align:middle}
 table.data thead th{background:var(--panel2);font-size:12px;font-weight:500;color:var(--subtle);white-space:nowrap}
 table.data th a{color:var(--subtle)}table.data tbody tr:hover{background:var(--panel2)}
-.leadtable td.prop{display:flex;gap:14px;align-items:center;min-width:300px}
-.th{width:88px;height:62px;flex:none;border-radius:8px;border:1px solid var(--line);background:var(--panel2);display:flex;align-items:center;justify-content:center;overflow:hidden;color:var(--subtle);font-size:11px}
+.pw{display:flex;gap:12px;align-items:center;min-width:280px}
+.th{width:72px;height:52px;flex:none;border-radius:8px;border:1px solid var(--line);background:var(--panel2);display:flex;align-items:center;justify-content:center;overflow:hidden;color:var(--subtle);font-size:11px}
 .th:hover{border-color:var(--accent);text-decoration:none}.th img{width:100%;height:100%;object-fit:cover}
 .ad a{font-weight:500;color:var(--ink);font-size:15px}.ad .subtle{display:block;font-size:12px}
 .num{text-align:right!important}.num small{font-size:11px}
@@ -60,3 +60,6 @@ table.data th a{color:var(--subtle)}table.data tbody tr:hover{background:var(--p
 .street-photo{max-width:100%;max-height:420px;border-radius:12px;border:1px solid var(--line)}
 .inline-form{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px}.inline-form input[type=text]{flex:1;min-width:160px}
 @media(max-width:800px){.grid-2{grid-template-columns:1fr}.topbar{padding:0 12px;gap:12px}main{padding:14px 12px}}
+
+.links{display:block;font-size:11px;margin-top:2px}.links a{margin-right:12px;color:var(--subtle)}.links a:hover{color:var(--accent2)}
+.links.big{font-size:13px}.links.big a{color:var(--accent2)}
