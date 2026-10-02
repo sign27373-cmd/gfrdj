@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}{{ prop.address_line or "Lead" }} - wh{% endblock %}
 {% block content %}
-  <a href="/leads" class="back">&laquo; Back to leads</a>
+  <a href="/leads" class="back" onclick="if(history.length>1){history.back();return false}">&laquo; Back to leads</a>
   <h1>{{ prop.address_line or "(no address)" }}</h1>
   <p class="subtle">{{ prop.city }}, {{ prop.state }} {{ prop.zip or "" }} &middot; parcel {{ prop.parcel_id or "unknown" }}</p>
 
