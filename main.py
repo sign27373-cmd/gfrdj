@@ -14,7 +14,7 @@ import re
 import secrets
 import time
 from pathlib import Path
-from urllib.parse import quote
+from urllib.parse import quote, urlencode
 from datetime import datetime, timezone
 
 from fastapi import BackgroundTasks, Depends, FastAPI, Form, HTTPException, Request
@@ -190,59 +190,107 @@ def dashboard(request: Request, _: bool = Depends(require_auth)):
     })
 
 
-@app.get("/leads")
-def leads(
-    request: Request,
-    state: str = "",
-    property_use: str = "",
-    city: str = "",
-    search: str = "",
-    sort: str = "assessed_value",
-    direction: str = "desc",
-    page: int = 1,
-    _: bool = Depends(require_auth),
-):
-    if sort not in SORT_COLUMNS:
-        sort = "assessed_value"
-    page = max(1, page)
+LEAD_SORTS = {
+    "assessed_value": "Assessed", "market_value_estimate": "Market", "arv_estimate": "ARV",
+    "estimated_equity": "Equity", "equity_pct": "Equity %", "bid_pct_arv": "Bid % of ARV",
+    "days_to_auction": "Days to auction", "auction_date": "Auction date",
+    "notice_date": "Notice date", "amount_in_default": "In default",
+    "opening_bid": "Opening bid", "living_sqft": "Sqft", "city": "City",
+}
+USE_GROUPS = ["Single family", "Townhouse", "Manufactured", "Multi-family",
+              "Commercial/Other", "Vacant land", "Unknown", "Other"]
+# (url name, view column) -> params min_<name> / max_<name>
+RANGES = [("assessed", "assessed_value"), ("market", "market_value_estimate"),
+          ("arv", "arv_estimate"), ("equity", "estimated_equity"), ("eqpct", "equity_pct"),
+          ("bidpct", "bid_pct_arv"), ("bid", "opening_bid"), ("default", "amount_in_default"),
+          ("sqft", "living_sqft")]
+PRESETS = [
+    ("All", ""),
+    ("Auctions in 30 days", "lead_type=pre_foreclosure&auction_within=30&sort=days_to_auction&direction=asc"),
+    ("High equity NV", "state=NV&min_equity=100000&sort=estimated_equity&direction=desc"),
+    ("Bid under 60% of ARV", "lead_type=pre_foreclosure&max_bidpct=60&sort=bid_pct_arv&direction=asc"),
+    ("Newest notices", "lead_type=pre_foreclosure&sort=notice_date&direction=desc"),
+]
+PER_PAGE_CHOICES = (50, 100, 200)
+NON_FILTER_KEYS = {"sort", "direction", "page", "per"}
 
-    query = supabase.table("wh_properties").select(
-        "id, state, county, address_line, city, zip, property_use, "
-        "assessed_value, market_value_estimate, arv_estimate, "
-        "estimated_equity, living_sqft, parcel_id",
+
+def _num(v):
+    try:
+        return float(v) if v not in (None, "") else None
+    except ValueError:
+        return None
+
+
+@app.get("/leads")
+def leads(request: Request, _: bool = Depends(require_auth)):
+    qp = request.query_params
+    sort = qp.get("sort") if qp.get("sort") in LEAD_SORTS else "assessed_value"
+    direction = "asc" if qp.get("direction") == "asc" else "desc"
+    per = int(qp["per"]) if qp.get("per", "").isdigit() and int(qp["per"]) in PER_PAGE_CHOICES else 50
+    page = max(1, int(qp["page"])) if qp.get("page", "").isdigit() else 1
+
+    query = supabase.table("wh_leads_v").select(
+        "id, state, county, address_line, address_note, city, zip, use_group, lead_type, "
+        "auction_date, days_to_auction, assessed_value, market_value_estimate, arv_estimate, "
+        "arv_method, estimated_equity, equity_pct, opening_bid, bid_pct_arv, "
+        "amount_in_default, living_sqft, owner_occupied",
         count="exact",
     )
-    if state:
-        query = query.eq("state", state)
-    if property_use:
-        query = query.ilike("property_use", f"%{property_use}%")
-    if city:
-        query = query.ilike("city", f"%{city}%")
-    if search:
-        query = query.or_(
-            f"address_line.ilike.%{search}%,parcel_id.ilike.%{search}%"
-        )
+    states = [x for x in qp.getlist("state") if x]
+    groups = [x for x in qp.getlist("use_group") if x]
+    if states:
+        query = query.in_("state", states)
+    if groups:
+        query = query.in_("use_group", groups)
+    if qp.get("lead_type"):
+        query = query.eq("lead_type", qp["lead_type"])
+    for key in ("county", "city", "subdivision", "zip"):
+        if qp.get(key):
+            query = query.ilike(key, f"%{qp[key]}%")
+    if qp.get("q"):
+        q = qp["q"].replace(",", " ")
+        query = query.or_(f"address_line.ilike.%{q}%,parcel_id.ilike.%{q}%")
+    for name, col in RANGES:
+        lo, hi = _num(qp.get(f"min_{name}")), _num(qp.get(f"max_{name}"))
+        if lo is not None:
+            query = query.gte(col, lo)
+        if hi is not None:
+            query = query.lte(col, hi)
+    within = _num(qp.get("auction_within"))
+    if within is not None:
+        query = query.gte("days_to_auction", 0).lte("days_to_auction", within)
+    if qp.get("has_arv") == "1":
+        query = query.not_.is_("arv_estimate", "null")
+    if qp.get("owner_occupied") in ("true", "false"):
+        query = query.eq("owner_occupied", qp["owner_occupied"] == "true")
+    if qp.get("show_incomplete") != "1":
+        query = query.eq("has_address", True)
 
-    query = query.order(sort, desc=(direction == "desc"))
-    start = (page - 1) * PAGE_SIZE
-    result = query.range(start, start + PAGE_SIZE - 1).execute()
-
+    query = query.order(sort, desc=(direction == "desc"), nullsfirst=False)
+    start = (page - 1) * per
+    result = query.range(start, start + per - 1).execute()
     total = result.count or 0
-    total_pages = max(1, (total + PAGE_SIZE - 1) // PAGE_SIZE)
+
+    soon = (supabase.table("wh_leads_v").select("id", count="exact")
+            .gte("days_to_auction", 0).lte("days_to_auction", 14).limit(1).execute().count or 0)
+
+    params = list(qp.multi_items())
+    chips = []
+    for i, (k, v) in enumerate(params):
+        if k in NON_FILTER_KEYS or v == "":
+            continue
+        rest = params[:i] + params[i + 1:]
+        chips.append((f"{k.replace('_', ' ')}: {v}", "/leads?" + urlencode(rest)))
 
     return templates.TemplateResponse("leads.html", {
-        "request": request,
-        "leads": result.data,
-        "state": state,
-        "property_use": property_use,
-        "city": city,
-        "search": search,
-        "sort": sort,
-        "direction": direction,
-        "sort_columns": SORT_COLUMNS,
-        "page": page,
-        "total_pages": total_pages,
-        "total": total,
+        "request": request, "leads": result.data, "qp": qp, "states": states, "groups": groups,
+        "sort": sort, "direction": direction, "per": per, "page": page,
+        "total": total, "total_pages": max(1, (total + per - 1) // per), "soon": soon,
+        "sorts": LEAD_SORTS, "use_groups": USE_GROUPS, "presets": PRESETS,
+        "per_choices": PER_PAGE_CHOICES, "chips": chips,
+        "page_qs": urlencode([p for p in params if p[0] != "page"]),
+        "sort_qs": urlencode([p for p in params if p[0] not in ("sort", "direction", "page")]),
     })
 
 
