@@ -1,48 +1,99 @@
-:root{--bg:#0b0f14;--panel:#121820;--panel2:#18202a;--line:#243040;--ink:#d7e0ea;--subtle:#7d8da0;--accent:#2dd4bf;--hot:#f87171;--warn:#fbbf24}
-*{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--ink);font:13px/1.4 -apple-system,"Segoe UI",Roboto,sans-serif}
-a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
-h1,h2,h3{font-weight:600;margin:.4em 0}
-.topbar{display:flex;align-items:center;gap:24px;padding:0 20px;height:44px;background:var(--panel);border-bottom:1px solid var(--line)}
-.brand{font-weight:700;color:var(--accent);font-size:16px}
-.topbar nav a{color:var(--ink);margin-right:18px;opacity:.75}.topbar nav a:hover{opacity:1;text-decoration:none}
-main{padding:16px 20px;max-width:1900px;margin:0 auto}
-.subtle{color:var(--subtle)}.warn{background:#3a2e0b;color:var(--warn);padding:8px 12px;border-radius:6px}
-.back{display:inline-block;margin-bottom:10px}
-input,select,button{font:inherit;color:var(--ink);background:var(--panel2);border:1px solid var(--line);border-radius:5px;padding:6px 8px;width:100%}
-button{background:var(--accent);color:#04201c;font-weight:600;border:0;cursor:pointer;width:auto;padding:7px 14px}
-button.ghost{background:var(--panel2);color:var(--ink);border:1px solid var(--line)}
-.stats{display:flex;gap:28px;align-items:center;margin-bottom:10px}
-.stats div{display:flex;flex-direction:column}.stats b{font:600 22px ui-monospace,Consolas,monospace}.stats .hot{color:var(--hot)}
-.stats span{color:var(--subtle);font-size:11px;text-transform:uppercase;letter-spacing:.05em}.stats .ghost{margin-left:auto}
-.tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
-.tabs a{padding:5px 12px;border:1px solid var(--line);border-radius:999px;color:var(--ink)}
-.tabs a.on,.tabs a:hover{background:var(--accent);color:#04201c;text-decoration:none}
-.chips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
-.chips a{background:var(--panel2);border:1px solid var(--line);border-radius:4px;padding:2px 8px;color:var(--ink)}.chips .clear{border:0;background:none;color:var(--subtle)}
-.layout{display:flex;gap:14px;align-items:flex-start}
-.side{width:250px;flex:none;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:12px;display:flex;flex-direction:column;gap:8px}
-.side.hidden{display:none}
-.side details{border-top:1px solid var(--line);padding-top:8px;display:flex;flex-direction:column;gap:6px}
-.side summary{cursor:pointer;font-weight:600;color:var(--subtle);text-transform:uppercase;font-size:11px;letter-spacing:.06em;margin-bottom:6px}
-.side label{color:var(--subtle);font-size:11px;display:block;margin:6px 0 2px}
-.side label.chk{display:flex;gap:6px;align-items:center;color:var(--ink);font-size:13px;margin:3px 0}.side label.chk input{width:auto}
-.pair{display:flex;gap:6px}
-.tablewrap{flex:1;min-width:0;overflow-x:auto}
-table.data{width:100%;border-collapse:collapse;background:var(--panel);border:1px solid var(--line);border-radius:8px}
-table.data th,table.data td{padding:6px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
-table.data thead th{position:sticky;top:0;background:var(--panel2);font-size:11px;text-transform:uppercase;letter-spacing:.05em;white-space:nowrap}
-table.data th a{color:var(--subtle)}table.data tbody tr:hover{background:var(--panel2)}
-.dense td{white-space:nowrap}.dense td.addr{white-space:normal;min-width:230px}.dense td.addr span{display:block;font-size:11px}
-.num{text-align:right!important;font-family:ui-monospace,Consolas,monospace}
-.badge{display:inline-block;padding:1px 6px;border-radius:4px;font-size:11px;font-weight:600;background:var(--panel2);border:1px solid var(--line)}
-.badge.pf{color:#c4b5fd;border-color:#5b4b9a}.badge.hot{color:var(--hot);border-color:var(--hot)}.badge.past{color:var(--subtle)}
-.st-NV{color:#60a5fa}.st-WA{color:#34d399}.st-TN{color:#fbbf24}
-.dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--subtle)}
-.dot-subdivision{background:#34d399}.dot-zip{background:#fbbf24}.dot-city{background:#f87171}
-.pager{display:flex;gap:16px;align-items:center;padding:12px 0}
-.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
-.kv{width:100%;border-collapse:collapse}.kv td{padding:4px 8px;border-bottom:1px solid var(--line)}
-.street-photo{max-width:100%;border-radius:8px;border:1px solid var(--line)}
-.inline-form{display:flex;gap:8px;align-items:center}.inline-form select,.inline-form input{width:auto}
-@media(max-width:900px){.layout{flex-direction:column}.side{width:100%}.grid-2{grid-template-columns:1fr}}
+{% extends "base.html" %}
+{% block title %}Leads - wh{% endblock %}
+{% macro m(v) %}{{ "${:,.0f}".format(v) if v is not none else "" }}{% endmacro %}
+{% macro th(col, label, cls="") %}
+<th class="{{ cls }}"><a href="/leads?{{ sort_qs }}{{ '&' if sort_qs }}sort={{ col }}&direction={{ 'asc' if sort == col and direction == 'desc' else 'desc' }}">{{ label }}{% if sort == col %} {{ '▼' if direction == 'desc' else '▲' }}{% endif %}</a></th>
+{% endmacro %}
+{% block content %}
+<div class="stats">
+  <div><b>{{ "{:,}".format(total) }}</b><span>matching leads</span></div>
+  <div><b class="hot">{{ soon }}</b><span>auctions in 14 days</span></div>
+  <button type="button" id="togglePanel" class="ghost">Filters</button>
+</div>
+
+<div class="tabs">
+  {% for label, qs in presets %}<a href="/leads{{ '?' + qs if qs }}" class="{{ 'on' if request.url.query == qs }}">{{ label }}</a>{% endfor %}
+</div>
+
+{% if chips %}<div class="chips">{% for label, url in chips %}<a href="{{ url }}">{{ label }} &times;</a>{% endfor %}<a href="/leads" class="clear">clear all</a></div>{% endif %}
+
+<div class="layout">
+<form class="side" id="panel" method="get" action="/leads">
+  <input type="hidden" name="sort" value="{{ sort }}"><input type="hidden" name="direction" value="{{ direction }}">
+  <input type="text" name="q" placeholder="Address or parcel ID" value="{{ qp.get('q','') }}">
+  <details open><summary>Lead</summary>
+    <select name="lead_type"><option value="">All lead types</option>
+      <option value="pre_foreclosure" {{ 'selected' if qp.get('lead_type') == 'pre_foreclosure' }}>Pre-foreclosure</option>
+      <option value="other" {{ 'selected' if qp.get('lead_type') == 'other' }}>Other</option></select>
+    <label>Auction within (days)</label><input type="number" name="auction_within" value="{{ qp.get('auction_within','') }}">
+    <label>Min / max in default</label><div class="pair"><input name="min_default" value="{{ qp.get('min_default','') }}"><input name="max_default" value="{{ qp.get('max_default','') }}"></div>
+    <label>Min / max opening bid</label><div class="pair"><input name="min_bid" value="{{ qp.get('min_bid','') }}"><input name="max_bid" value="{{ qp.get('max_bid','') }}"></div>
+    <label>Bid % of ARV (min / max)</label><div class="pair"><input name="min_bidpct" value="{{ qp.get('min_bidpct','') }}"><input name="max_bidpct" value="{{ qp.get('max_bidpct','') }}"></div>
+  </details>
+  <details open><summary>Location</summary>
+    {% for s in ["NV","WA","TN"] %}<label class="chk"><input type="checkbox" name="state" value="{{ s }}" {{ 'checked' if s in states }}> {{ s }}</label>{% endfor %}
+    <input name="county" placeholder="County" value="{{ qp.get('county','') }}">
+    <input name="city" placeholder="City" value="{{ qp.get('city','') }}">
+    <input name="zip" placeholder="Zip" value="{{ qp.get('zip','') }}">
+    <input name="subdivision" placeholder="Subdivision" value="{{ qp.get('subdivision','') }}">
+  </details>
+  <details open><summary>Value</summary>
+    <label>Assessed (min / max)</label><div class="pair"><input name="min_assessed" value="{{ qp.get('min_assessed','') }}"><input name="max_assessed" value="{{ qp.get('max_assessed','') }}"></div>
+    <label>Market (min / max)</label><div class="pair"><input name="min_market" value="{{ qp.get('min_market','') }}"><input name="max_market" value="{{ qp.get('max_market','') }}"></div>
+    <label>ARV (min / max)</label><div class="pair"><input name="min_arv" value="{{ qp.get('min_arv','') }}"><input name="max_arv" value="{{ qp.get('max_arv','') }}"></div>
+    <label>Equity $ (min / max)</label><div class="pair"><input name="min_equity" value="{{ qp.get('min_equity','') }}"><input name="max_equity" value="{{ qp.get('max_equity','') }}"></div>
+    <label>Equity % (min / max)</label><div class="pair"><input name="min_eqpct" value="{{ qp.get('min_eqpct','') }}"><input name="max_eqpct" value="{{ qp.get('max_eqpct','') }}"></div>
+  </details>
+  <details><summary>Property</summary>
+    {% for g in use_groups %}<label class="chk"><input type="checkbox" name="use_group" value="{{ g }}" {{ 'checked' if g in groups }}> {{ g }}</label>{% endfor %}
+    <label>Sqft (min / max)</label><div class="pair"><input name="min_sqft" value="{{ qp.get('min_sqft','') }}"><input name="max_sqft" value="{{ qp.get('max_sqft','') }}"></div>
+    <select name="owner_occupied"><option value="">Owner-occupied: any</option>
+      <option value="true" {{ 'selected' if qp.get('owner_occupied') == 'true' }}>Yes</option>
+      <option value="false" {{ 'selected' if qp.get('owner_occupied') == 'false' }}>No</option></select>
+    <label class="chk"><input type="checkbox" name="has_arv" value="1" {{ 'checked' if qp.get('has_arv') == '1' }}> Has ARV</label>
+    <label class="chk"><input type="checkbox" name="show_incomplete" value="1" {{ 'checked' if qp.get('show_incomplete') == '1' }}> Show rows with no address</label>
+  </details>
+  <select name="per">{% for n in per_choices %}<option value="{{ n }}" {{ 'selected' if per == n }}>{{ n }} per page</option>{% endfor %}</select>
+  <button type="submit">Apply filters</button>
+</form>
+
+<div class="tablewrap">
+<table class="data dense">
+  <thead><tr>
+    <th>Address</th><th>St</th><th>Type</th>
+    {{ th('auction_date', 'Auction') }}
+    {{ th('assessed_value', 'Assessed', 'num') }}{{ th('market_value_estimate', 'Market', 'num') }}{{ th('arv_estimate', 'ARV', 'num') }}
+    {{ th('estimated_equity', 'Equity', 'num') }}{{ th('equity_pct', 'Eq %', 'num') }}
+    {{ th('opening_bid', 'Bid', 'num') }}{{ th('bid_pct_arv', 'Bid/ARV', 'num') }}{{ th('amount_in_default', 'Default', 'num') }}{{ th('living_sqft', 'Sqft', 'num') }}
+  </tr></thead>
+  <tbody>
+  {% for l in leads %}
+  <tr>
+    <td class="addr"><a href="/leads/{{ l.id }}">{{ l.address_line or l.address_note or "(no address)" }}</a>
+      <span class="subtle">{{ l.city or "" }} {{ l.zip or "" }} · {{ l.use_group }}</span></td>
+    <td><span class="badge st-{{ l.state }}">{{ l.state }}</span></td>
+    <td>{% if l.lead_type == 'pre_foreclosure' %}<span class="badge pf">PF</span>{% endif %}</td>
+    <td>{% if l.auction_date %}{{ l.auction_date[:10] }}{% if l.days_to_auction is not none %} <span class="badge {{ 'hot' if 0 <= l.days_to_auction <= 14 else 'past' if l.days_to_auction < 0 }}">{{ l.days_to_auction }}d</span>{% endif %}{% endif %}</td>
+    <td class="num">{{ m(l.assessed_value) }}</td>
+    <td class="num">{{ m(l.market_value_estimate) }}</td>
+    <td class="num">{{ m(l.arv_estimate) }}{% if l.arv_method %} <span class="dot dot-{{ l.arv_method }}" title="ARV from {{ l.arv_method }} comps"></span>{% endif %}</td>
+    <td class="num">{{ m(l.estimated_equity) }}</td>
+    <td class="num">{{ l.equity_pct ~ '%' if l.equity_pct is not none }}</td>
+    <td class="num">{{ m(l.opening_bid) }}</td>
+    <td class="num">{{ l.bid_pct_arv ~ '%' if l.bid_pct_arv is not none }}</td>
+    <td class="num">{{ m(l.amount_in_default) }}</td>
+    <td class="num">{{ l.living_sqft or "" }}</td>
+  </tr>
+  {% else %}<tr><td colspan="13" class="subtle">No leads match these filters.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+<div class="pager">
+  {% if page > 1 %}<a href="/leads?{{ page_qs }}{{ '&' if page_qs }}page={{ page - 1 }}">&laquo; Prev</a>{% endif %}
+  <span class="subtle">Page {{ page }} of {{ total_pages }}</span>
+  {% if page < total_pages %}<a href="/leads?{{ page_qs }}{{ '&' if page_qs }}page={{ page + 1 }}">Next &raquo;</a>{% endif %}
+</div>
+</div>
+</div>
+<script>document.getElementById('togglePanel').onclick=function(){document.getElementById('panel').classList.toggle('hidden')}</script>
+{% endblock %}
