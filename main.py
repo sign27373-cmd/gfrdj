@@ -208,7 +208,6 @@ PRESETS = [
     ("All", ""),
     ("Auctions in 30 days", "lead_type=pre_foreclosure&auction_within=30&sort=days_to_auction&direction=asc"),
     ("High equity NV", "state=NV&min_equity=100000&sort=estimated_equity&direction=desc"),
-    ("Bid under 60% of ARV", "lead_type=pre_foreclosure&max_bidpct=60&sort=bid_pct_arv&direction=asc"),
     ("Newest notices", "lead_type=pre_foreclosure&sort=notice_date&direction=desc"),
 ]
 PER_PAGE_CHOICES = (50, 100, 200)
@@ -217,7 +216,10 @@ NON_FILTER_KEYS = {"sort", "direction", "page", "per"}
 
 def _num(v):
     try:
-        return float(v) if v not in (None, "") else None
+        if v in (None, ""):
+            return None
+        f = float(v)
+        return int(f) if f.is_integer() else f
     except ValueError:
         return None
 
@@ -271,6 +273,8 @@ def leads(request: Request, _: bool = Depends(require_auth)):
     start = (page - 1) * per
     result = query.range(start, start + per - 1).execute()
     total = result.count or 0
+    for row in result.data:
+        row["photo"] = photo_url_for(row)
 
     soon = (supabase.table("wh_leads_v").select("id", count="exact")
             .gte("days_to_auction", 0).lte("days_to_auction", 14).limit(1).execute().count or 0)
