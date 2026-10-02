@@ -4,6 +4,8 @@
   <a href="/leads" class="back" onclick="if(history.length>1){history.back();return false}">&laquo; Back to leads</a>
   <h1>{{ prop.address_line or "(no address)" }}</h1>
   <p class="subtle">{{ prop.city }}, {{ prop.state }} {{ prop.zip or "" }} &middot; parcel {{ prop.parcel_id or "unknown" }}</p>
+  {% set full = [prop.address_line, prop.city, prop.state, prop.zip]|select|join(' ') %}
+  {% if prop.address_line %}<p class="links big"><a href="https://www.google.com/search?q={{ full|urlencode }}" target="_blank" rel="noopener">Search on Google</a><a href="https://www.google.com/maps/search/?api=1&query={{ full|urlencode }}" target="_blank" rel="noopener">Open in Maps</a><a href="https://www.zillow.com/homes/{{ full|replace(',', '')|replace(' ', '-')|urlencode }}_rb/" target="_blank" rel="noopener">Search on Zillow</a></p>{% endif %}
 
   <form method="post" action="/leads/{{ prop.id }}/stage" class="stagebar">
     <span class="subtle">Deal stage</span>
