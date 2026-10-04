@@ -63,3 +63,16 @@ table.data th a{color:var(--subtle)}table.data tbody tr:hover{background:var(--p
 
 .links{display:block;font-size:11px;margin-top:2px}.links a{margin-right:12px;color:var(--subtle)}.links a:hover{color:var(--accent2)}
 .links.big{font-size:13px}.links.big a{color:var(--accent2)}
+
+.resetbtn{padding:8px 12px;color:var(--subtle)}
+.starcell{width:36px;padding-right:0!important}
+.star{background:none;color:var(--line);font-size:20px;padding:0 4px;line-height:1}.star:hover{background:none;color:var(--accent2)}.star.on{color:#f5c542}
+.jump{display:inline-flex;gap:6px;margin-left:auto}.jump input{width:130px}.jump button{padding:8px 14px}
+
+button.ghost{background:var(--panel2);color:var(--ink);border:1px solid var(--line)}button.ghost:hover{background:var(--panel2);border-color:var(--accent)}
+.savedtab{display:inline-flex;align-items:center;border:1px solid var(--line);border-radius:999px;background:var(--panel)}
+.savedtab a{padding:6px 4px 6px 14px;color:var(--ink);font-size:13px}.savedtab a:hover{text-decoration:none}
+.savedtab.on{border-color:var(--accent);background:var(--panel2)}
+.delsearch{background:none;color:var(--subtle);padding:0 10px 0 4px;font-size:16px}.delsearch:hover{background:none;color:var(--hot)}
+.notesbox{max-width:640px;margin:0 0 18px;display:flex;flex-direction:column;gap:8px}
+.notesbox textarea{width:100%;font:inherit;color:var(--ink);background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px;resize:vertical}
