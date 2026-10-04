@@ -9,7 +9,7 @@
   <input type="hidden" name="sort" value="{{ sort }}"><input type="hidden" name="direction" value="{{ direction }}">
   <div class="frow">
     <input type="text" name="q" class="search" placeholder="Search address or parcel ID" value="{{ qp.get('q','') }}">
-    <button type="submit">Apply</button>
+    <button type="submit">Apply</button><button type="button" id="savesearch" class="ghost">Save search</button><a href="/leads" class="resetbtn">Reset all</a>
   </div>
   <div class="frow">
     {% for s in ["NV","WA","TN"] %}<label class="pill"><input class="auto" type="checkbox" name="state" value="{{ s }}" {{ 'checked' if s in states }}><span>{{ s }}</span></label>{% endfor %}
@@ -23,10 +23,10 @@
       <button type="button" class="chipbtn" data-min="200000" data-max="400000">$200&ndash;400k</button>
       <button type="button" class="chipbtn" data-min="400000" data-max="600000">$400&ndash;600k</button>
       <button type="button" class="chipbtn" data-min="600000" data-max="">$600k+</button>
-      <small class="subtle">assessed value</small>
+      <small class="subtle">market value</small>
     </div>
     <div class="sg">
-      {{ step('min_assessed', 'Assessed value, min') }}{{ step('max_assessed', 'Assessed value, max') }}
+      {{ step('min_market', 'Market value, min') }}{{ step('max_market', 'Market value, max') }}
       {{ step('min_arv', 'ARV, min') }}{{ step('max_arv', 'ARV, max') }}
       {{ step('min_equity', 'Equity, min') }}{{ step('max_equity', 'Equity, max') }}
     </div>
@@ -51,6 +51,7 @@
       {% for g in use_groups %}<label class="pill"><input type="checkbox" name="use_group" value="{{ g }}" {{ 'checked' if g in groups }}><span>{{ g }}</span></label>{% endfor %}
     </div>
     <div class="frow" style="margin-top:8px">
+      <label class="pill"><input type="checkbox" name="starred" value="1" {{ 'checked' if qp.get('starred') == '1' }}><span>Starred only</span></label>
       <label class="pill"><input type="checkbox" name="has_arv" value="1" {{ 'checked' if qp.get('has_arv') == '1' }}><span>Has ARV</span></label>
       <label class="pill"><input type="checkbox" name="show_incomplete" value="1" {{ 'checked' if qp.get('show_incomplete') == '1' }}><span>Show rows with no address</span></label>
       <select name="owner_occupied" class="sel"><option value="">Owner-occupied: any</option><option value="true" {{ 'selected' if qp.get('owner_occupied') == 'true' }}>Yes</option><option value="false" {{ 'selected' if qp.get('owner_occupied') == 'false' }}>No</option></select>
@@ -61,45 +62,58 @@
 
 <div class="tabs">
   {% for label, qs in presets %}<a href="/leads{{ '?' + qs if qs }}" class="{{ 'on' if request.url.query == qs }}">{{ label }}</a>{% endfor %}
+  {% for s in saved %}<span class="savedtab {{ 'on' if cur_query == s.query }}"><a href="/leads{{ '?' + s.query if s.query }}">{{ s.name }}</a><button type="button" class="delsearch" data-id="{{ s.id }}" aria-label="Delete saved search">&times;</button></span>{% endfor %}
   <span class="count"><b>{{ "{:,}".format(total) }}</b> leads &middot; <b class="hot">{{ soon }}</b> auctions in 14 days</span>
 </div>
 {% if chips %}<div class="chips">{% for label, url in chips %}<a href="{{ url }}">{{ label }} &times;</a>{% endfor %}<a href="/leads" class="clear">clear all</a></div>{% endif %}
 
 <table class="data leadtable">
   <thead><tr>
-    <th>Property</th>{{ th('auction_date', 'Auction') }}{{ th('assessed_value', 'Assessed', 'num') }}{{ th('arv_estimate', 'ARV', 'num') }}{{ th('estimated_equity', 'Equity', 'num') }}
+    <th></th><th>Property</th>{{ th('auction_date', 'Auction') }}{{ th('market_value_estimate', 'Market value', 'num') }}{{ th('zip_bottom_tier', 'Low-end ZIP', 'num') }}{{ th('arv_estimate', 'ARV', 'num') }}{{ th('estimated_equity', 'Equity', 'num') }}
   </tr></thead>
   <tbody>
   {% for l in leads %}
   <tr>
+    <td class="starcell"><button type="button" class="star {{ 'on' if l.starred }}" data-id="{{ l.id }}" aria-label="Star this lead">&#9733;</button></td>
     <td class="prop"><div class="pw">
       <a href="/leads/{{ l.id }}" class="th">{% if l.photo %}<img src="{{ l.photo }}" loading="lazy" alt="" onerror="this.replaceWith(document.createTextNode('no photo'))">{% else %}no photo{% endif %}</a>
       <div class="ad"><a href="/leads/{{ l.id }}">{{ l.address_line or l.address_note or "(no address)" }}</a>
         <span class="subtle"><span class="st-{{ l.state }}">{{ l.state }}</span> &middot; {{ l.city or "" }} {{ l.zip or "" }}</span>{{ links(l) }}</div>
     </div></td>
     <td>{% if l.auction_date %}{{ l.auction_date[:10] }}{% if l.days_to_auction is not none %} <span class="badge {{ 'hot' if 0 <= l.days_to_auction <= 14 else 'past' if l.days_to_auction < 0 }}">{{ l.days_to_auction }}d</span>{% endif %}{% endif %}</td>
-    <td class="num">{{ m(l.assessed_value) }}</td>
+    <td class="num">{{ m(l.market_value_estimate) if l.market_value_estimate else "" }}</td>
+    <td class="num subtle" title="Typical value of lower-priced homes in this ZIP (Zillow Research)">{{ m(l.zip_bottom_tier) }}</td>
     <td class="num">{{ m(l.arv_estimate) }}{% if l.arv_method %} <span class="dot dot-{{ l.arv_method }}" title="ARV from {{ l.arv_method }} comps"></span>{% endif %}</td>
     <td class="num">{{ m(l.estimated_equity) }}{% if l.equity_pct is not none %}<small class="subtle"> {{ l.equity_pct }}%</small>{% endif %}</td>
   </tr>
-  {% else %}<tr><td colspan="5" class="subtle">No leads match these filters.</td></tr>
+  {% else %}<tr><td colspan="7" class="subtle">No leads match these filters.</td></tr>
   {% endfor %}
   </tbody>
 </table>
 <div class="pager">
   {% if page > 1 %}<a href="/leads?{{ page_qs }}{{ '&' if page_qs }}page={{ page - 1 }}">&laquo; Prev</a>{% endif %}
   <span class="subtle">Page {{ page }} of {{ total_pages }}</span>
+  <span class="jump"><input type="number" id="jumpn" min="1" max="{{ total_pages }}" placeholder="Go to page"><button type="button" id="jumpbtn">Go</button></span>
   {% if page < total_pages %}<a href="/leads?{{ page_qs }}{{ '&' if page_qs }}page={{ page + 1 }}">Next &raquo;</a>{% endif %}
 </div>
 <script>
 var ff=document.getElementById('ff');
+document.getElementById('savesearch').onclick=function(){var name=prompt('Name this search:');if(!name)return;
+  var q=location.search.replace(/^\?/,'').split('&').filter(function(p){return p&&p.indexOf('page=')!==0}).join('&');
+  fetch('/searches',{method:'POST',body:new URLSearchParams({name:name,query:q}),credentials:'same-origin'}).then(function(){location.reload()})};
+document.querySelectorAll('.delsearch').forEach(function(b){b.onclick=function(){if(!confirm('Delete this saved search?'))return;
+  fetch('/searches/'+b.dataset.id+'/delete',{method:'POST',credentials:'same-origin'}).then(function(){location.reload()})}});
+document.getElementById('jumpbtn').onclick=function(){var n=parseInt(document.getElementById('jumpn').value,10);if(!n)return;n=Math.min(Math.max(1,n),{{ total_pages }});location.href='/leads?{{ page_qs }}{{ '&' if page_qs }}page='+n};
+document.getElementById('jumpn').addEventListener('keydown',function(e){if(e.key==='Enter')document.getElementById('jumpbtn').click()});
+document.querySelector('.leadtable').addEventListener('click',function(e){var b=e.target.closest('.star');if(!b)return;
+  fetch('/leads/'+b.dataset.id+'/star',{method:'POST',credentials:'same-origin'}).then(function(r){return r.json()}).then(function(j){b.classList.toggle('on',j.starred)})});
 ff.addEventListener('change',function(e){if(e.target.classList.contains('auto'))ff.submit()});
 ff.addEventListener('click',function(e){
   var b=e.target.closest('.stp button');
   if(b){var i=b.parentNode.querySelector('input'),v=i.value===''?null:+i.value,d=+b.dataset.d;
     if(v===null&&d<0)return;i.value=Math.max(0,(v||0)+d);return}
   var c=e.target.closest('.chipbtn');
-  if(c){ff.elements.min_assessed.value=c.dataset.min;ff.elements.max_assessed.value=c.dataset.max;ff.submit()}
+  if(c){ff.elements.min_market.value=c.dataset.min;ff.elements.max_market.value=c.dataset.max;ff.submit()}
 });
 </script>
 {% endblock %}
