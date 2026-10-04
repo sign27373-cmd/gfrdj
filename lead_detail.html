@@ -16,6 +16,14 @@
     </select>
     <button type="submit">Save stage</button>
   </form>
+  <div class="notesbox">
+    <textarea id="notes" rows="3" placeholder="Notes on this house (calls, condition, what you found online)...">{{ prop.notes or "" }}</textarea>
+    <div class="inline-form">
+      <button type="button" id="savenotes">Save notes</button>
+      <button type="button" class="ghost" id="starbtn">{{ "&#9733; Starred" if prop.starred else "&#9734; Star this lead" }}</button>
+      <span class="subtle" id="notemsg"></span>
+    </div>
+  </div>
 
   <section class="grid-2">
     <div>
@@ -122,4 +130,12 @@
     <p class="subtle">No contact attempts logged yet.</p>
     {% endif %}
   </section>
+<script>
+document.getElementById('savenotes').onclick=function(){
+  fetch('/leads/{{ prop.id }}/notes',{method:'POST',body:new URLSearchParams({notes:document.getElementById('notes').value}),credentials:'same-origin'})
+   .then(function(){document.getElementById('notemsg').textContent='Saved'});};
+document.getElementById('starbtn').onclick=function(){var b=this;
+  fetch('/leads/{{ prop.id }}/star',{method:'POST',credentials:'same-origin'}).then(function(r){return r.json()})
+   .then(function(j){b.innerHTML=j.starred?'&#9733; Starred':'&#9734; Star this lead'})};
+</script>
 {% endblock %}
