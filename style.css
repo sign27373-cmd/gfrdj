@@ -76,3 +76,5 @@ button.ghost{background:var(--panel2);color:var(--ink);border:1px solid var(--li
 .delsearch{background:none;color:var(--subtle);padding:0 10px 0 4px;font-size:16px}.delsearch:hover{background:none;color:var(--hot)}
 .notesbox{max-width:640px;margin:0 0 18px;display:flex;flex-direction:column;gap:8px}
 .notesbox textarea{width:100%;font:inherit;color:var(--ink);background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px;resize:vertical}
+
+.tracebox{margin-top:10px;border-top:1px solid var(--line);padding-top:8px}
