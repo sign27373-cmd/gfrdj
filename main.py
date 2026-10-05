@@ -380,7 +380,9 @@ def skip_trace(property_id: str, first_name: str = Form(""), last_name: str = Fo
                         "response": res["response"]})
     except NotConfigured as e:
         return RedirectResponse(f"/leads/{property_id}?trace_msg={quote(str(e))}", status_code=303)
-    except AvaError as e:
+    except Exception as e:
+        if not isinstance(e, AvaError):
+            e = AvaError(0, f"Skip trace failed before reaching Ava: {e}")
         row.update(status="error", raw={"request": {"method": req["method"], "url": req["url"], "body": req["body"]},
                                         "error": e.message})
         supabase.table("wh_skip_traces").insert(row).execute()
