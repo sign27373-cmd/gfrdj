@@ -55,11 +55,21 @@
           <tr><th>Type</th><td>{{ o.entity_type }}</td></tr>
           <tr><th>Mailing address</th><td>{{ o.mailing_address or "" }} {{ o.mailing_city or "" }} {{ o.mailing_state or "" }} {{ o.mailing_zip or "" }}</td></tr>
         </table>
-        <form method="post" action="/leads/{{ prop.id }}/skiptrace" class="inline-form" onsubmit="return confirm('Run a skip trace on this owner? It uses credits.')">
-          <input type="hidden" name="owner_name" value="{{ o.full_name or '' }}">
-          <label class="subtle"><input type="checkbox" name="deep" value="1" style="width:auto"> Deep search</label>
-          <button type="submit">Skip trace</button>
-        </form>
+        <p class="subtle">Skip trace (first name first, edit if wrong):</p>
+        {% for p in o.people %}
+          {% if p.entity %}
+          <p class="subtle">{{ p.raw }} is a company or trust. Trace the person behind it instead.</p>
+          {% else %}
+          <form method="post" action="/leads/{{ prop.id }}/skiptrace/preview" class="inline-form person">
+            <input name="first_name" value="{{ p.first }}" placeholder="First" aria-label="First name">
+            <input name="last_name" value="{{ p.last }}" placeholder="Last" aria-label="Last name">
+            <button type="button" class="ghost swapnames" title="Swap first and last">&#8646;</button>
+            <input type="hidden" name="mail_addr" value="{{ o.mailing_address or '' }}"><input type="hidden" name="mail_city" value="{{ o.mailing_city or '' }}">
+            <input type="hidden" name="mail_state" value="{{ o.mailing_state or '' }}"><input type="hidden" name="mail_zip" value="{{ o.mailing_zip or '' }}">
+            <button type="submit">Review &amp; trace</button>
+          </form>
+          {% endif %}
+        {% endfor %}
         {% endfor %}
       {% else %}
         <p class="subtle">No owner on file.</p>
@@ -67,9 +77,15 @@
       {% if trace_msg %}<p class="warn">{{ trace_msg }}</p>{% endif %}
       {% for t in traces %}
       <div class="tracebox">
-        <b>{{ t.owner_name or "Owner" }}</b> <span class="subtle">&middot; {{ t.search_type }} &middot; {{ t.status }} &middot; {{ t.created_at[:10] }}</span>
+        <b>{{ t.owner_name or "Owner" }}</b> <span class="subtle">&middot; {{ t.search_type }} &middot; {{ t.status }} &middot; {{ t.created_at[:10] }}{% if t.raw and t.raw.summary and t.raw.summary.credits is not none %} &middot; {{ t.raw.summary.credits }} credits{% endif %}</span>
+        {% if t.raw and t.raw.error %}<div class="warn">{{ t.raw.error }}</div>{% endif %}
+        {% if t.raw and t.raw.summary %}{% for c in t.raw.summary.checks %}<div class="{{ 'ok' if c.ok else 'bad' }}">{{ '&#10003;' if c.ok else '&#9888;' }} {{ c.label }}</div>{% endfor %}{% endif %}
         {% for p in t.phones or [] %}<div><a href="tel:{{ p.number }}">{{ p.number }}</a> <span class="subtle">{{ p.type or "" }}</span></div>{% endfor %}
         {% for e in t.emails or [] %}<div><a href="mailto:{{ e }}">{{ e }}</a></div>{% endfor %}
+        {% if t.raw and t.raw.summary and t.raw.summary.related %}<div class="subtle" style="margin-top:6px">Related people</div>
+          {% for r in t.raw.summary.related %}<div>{{ r.name }} <span class="subtle">{{ r.relationship or "" }}{{ " (deceased)" if r.deceased }}</span>
+            {% for p in r.phones %}<a href="tel:{{ p.number }}">{{ p.number }}</a> {% endfor %}</div>{% endfor %}{% endif %}
+        {% if t.raw and t.raw.request %}<details><summary class="subtle">Request sent</summary><pre>{{ t.raw.request|tojson(indent=2) }}</pre></details>{% endif %}
       </div>
       {% endfor %}
     </div>
@@ -144,6 +160,7 @@
     {% endif %}
   </section>
 <script>
+document.querySelectorAll('.swapnames').forEach(function(b){b.onclick=function(){var f=b.form,a=f.elements.first_name,c=f.elements.last_name,t=a.value;a.value=c.value;c.value=t}});
 document.getElementById('savenotes').onclick=function(){
   fetch('/leads/{{ prop.id }}/notes',{method:'POST',body:new URLSearchParams({notes:document.getElementById('notes').value}),credentials:'same-origin'})
    .then(function(){document.getElementById('notemsg').textContent='Saved'});};
