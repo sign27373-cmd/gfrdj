@@ -78,3 +78,10 @@ button.ghost{background:var(--panel2);color:var(--ink);border:1px solid var(--li
 .notesbox textarea{width:100%;font:inherit;color:var(--ink);background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px;resize:vertical}
 
 .tracebox{margin-top:10px;border-top:1px solid var(--line);padding-top:8px}
+
+pre,.json{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:12px;overflow:auto;font-size:12px}
+.person input{width:auto;min-width:90px}
+
+.opt{display:block;margin:6px 0}.opt input{width:auto;margin-right:6px}
+.tracebox .ok{color:#7dd3c0}.tracebox .bad{color:#e8c46a}
+.reviewform{max-width:720px}
