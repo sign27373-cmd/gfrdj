@@ -55,10 +55,23 @@
           <tr><th>Type</th><td>{{ o.entity_type }}</td></tr>
           <tr><th>Mailing address</th><td>{{ o.mailing_address or "" }} {{ o.mailing_city or "" }} {{ o.mailing_state or "" }} {{ o.mailing_zip or "" }}</td></tr>
         </table>
+        <form method="post" action="/leads/{{ prop.id }}/skiptrace" class="inline-form" onsubmit="return confirm('Run a skip trace on this owner? It uses credits.')">
+          <input type="hidden" name="owner_name" value="{{ o.full_name or '' }}">
+          <label class="subtle"><input type="checkbox" name="deep" value="1" style="width:auto"> Deep search</label>
+          <button type="submit">Skip trace</button>
+        </form>
         {% endfor %}
       {% else %}
         <p class="subtle">No owner on file.</p>
       {% endif %}
+      {% if trace_msg %}<p class="warn">{{ trace_msg }}</p>{% endif %}
+      {% for t in traces %}
+      <div class="tracebox">
+        <b>{{ t.owner_name or "Owner" }}</b> <span class="subtle">&middot; {{ t.search_type }} &middot; {{ t.status }} &middot; {{ t.created_at[:10] }}</span>
+        {% for p in t.phones or [] %}<div><a href="tel:{{ p.number }}">{{ p.number }}</a> <span class="subtle">{{ p.type or "" }}</span></div>{% endfor %}
+        {% for e in t.emails or [] %}<div><a href="mailto:{{ e }}">{{ e }}</a></div>{% endfor %}
+      </div>
+      {% endfor %}
     </div>
   </section>
 
