@@ -194,6 +194,8 @@ def dashboard(request: Request, _: bool = Depends(require_auth)):
     })
 
 
+TRACE_TABLE = "wh_skip_trace_results"
+
 LEAD_SORTS = {
     "assessed_value": "Assessed", "market_value_estimate": "Market", "arv_estimate": "ARV",
     "estimated_equity": "Equity", "equity_pct": "Equity %", "bid_pct_arv": "Bid % of ARV",
@@ -385,9 +387,17 @@ def skip_trace(property_id: str, first_name: str = Form(""), last_name: str = Fo
             e = AvaError(0, f"Skip trace failed before reaching Ava: {e}")
         row.update(status="error", raw={"request": {"method": req["method"], "url": req["url"], "body": req["body"]},
                                         "error": e.message})
-        supabase.table("wh_skip_traces").insert(row).execute()
+        try:
+            supabase.table(TRACE_TABLE).insert(row).execute()
+        except Exception:
+            pass
         return RedirectResponse(f"/leads/{property_id}?trace_msg={quote(e.message)}", status_code=303)
-    supabase.table("wh_skip_traces").insert(row).execute()
+    try:
+        supabase.table(TRACE_TABLE).insert(row).execute()
+    except Exception as save_err:
+        found = ", ".join(p["number"] for p in row.get("phones") or []) or "none"
+        msg = f"Ava returned a result but saving failed ({save_err}). Phones found: {found}"
+        return RedirectResponse(f"/leads/{property_id}?trace_msg={quote(msg)}", status_code=303)
     return RedirectResponse(f"/leads/{property_id}", status_code=303)
 
 
@@ -429,7 +439,7 @@ def lead_detail(request: Request, property_id: str, _: bool = Depends(require_au
     for o in owners:
         o["people"] = parse_people(o.get("full_name"))
     try:
-        traces = (supabase.table("wh_skip_traces").select("*").eq("property_id", property_id)
+        traces = (supabase.table(TRACE_TABLE).select("*").eq("property_id", property_id)
                   .order("created_at", desc=True).execute().data)
     except Exception:
         traces = []
