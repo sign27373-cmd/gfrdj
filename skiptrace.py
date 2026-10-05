@@ -104,23 +104,56 @@ def build_request(mode, first, last, address, city, state, zip_):
     return {"method": "POST", "url": f"{BASE_URL}/{endpoint}", "path": f"/{endpoint}", "body": body}
 
 
+def _s(x):
+    """Turn whatever Ava sent (string, dict, list) into plain text."""
+    if x is None:
+        return ""
+    if isinstance(x, str):
+        return x
+    if isinstance(x, dict):
+        for k in ("fullName", "name", "full_name"):
+            if isinstance(x.get(k), str) and x[k].strip():
+                return x[k]
+        return " ".join(_s(x.get(k)) for k in ("firstName", "middleName", "lastName") if x.get(k)).strip()
+    if isinstance(x, (list, tuple)):
+        return ", ".join(_s(i) for i in x)
+    return str(x)
+
+
+def _addr_pair(a):
+    if isinstance(a, dict):
+        return _s(a.get("street") or a.get("address") or a.get("line1")), _s(a.get("zip") or a.get("postalCode"))
+    text = _s(a)
+    m = re.search(r"\b(\d{5})(?:-\d{4})?\b", text)
+    return text, (m.group(1) if m else "")
+
+
 def _key(street, zip_):
-    toks = re.sub(r"[^A-Z0-9 ]", "", (street or "").upper()).split()
-    return (toks[0] if toks else "", toks[1] if len(toks) > 1 else "", (zip_ or "")[:5])
+    toks = re.sub(r"[^A-Z0-9 ]", "", _s(street).upper()).split()
+    return (toks[0] if toks else "", toks[1] if len(toks) > 1 else "", _s(zip_)[:5])
+
+
+def _phone(p):
+    if isinstance(p, dict):
+        return {"number": _s(p.get("number") or p.get("phone")), "type": _s(p.get("type"))}
+    return {"number": _s(p), "type": ""}
+
+
+def _email(e):
+    return _s(e.get("address") or e.get("email")) if isinstance(e, dict) else _s(e)
 
 
 def normalize(mode, resp):
     d = (resp or {}).get("data") or {}
     subj = (d.get("subject") or {}) if mode == "deep" else d
-    full = lambda x: " ".join(filter(None, [x.get("firstName"), x.get("lastName")]))
-    phones = lambda x: [{"number": p.get("number"), "type": p.get("type")} for p in x.get("phones") or []]
+    full = lambda x: " ".join(filter(None, [_s(x.get("firstName")), _s(x.get("lastName"))]))
+    phones = lambda x: [_phone(p) for p in x.get("phones") or []]
     return {
         "matched": bool(d.get("matchFound")), "credits": d.get("creditsCharged"),
-        "phones": phones(subj),
-        "emails": [e.get("address") if isinstance(e, dict) else e for e in subj.get("emails") or []],
-        "name": subj.get("name") or full(subj), "addresses": subj.get("addresses") or [],
-        "match_type": d.get("matchType"), "deceased": subj.get("deceased"), "age": subj.get("age"),
-        "related": [{"name": full(r), "relationship": r.get("relationship"),
+        "phones": phones(subj), "emails": [_email(e) for e in subj.get("emails") or []],
+        "name": _s(subj.get("name")) or full(subj), "addresses": subj.get("addresses") or [],
+        "match_type": _s(d.get("matchType")), "deceased": subj.get("deceased"), "age": subj.get("age"),
+        "related": [{"name": full(r), "relationship": _s(r.get("relationship")),
                      "deceased": r.get("deceased"), "phones": phones(r)}
                     for r in d.get("relatedPeople") or []],
     }
@@ -134,8 +167,8 @@ def assess(first, last, norm, known_addresses):
         ok = first.upper() in nm and last.upper() in nm
         checks.append({"ok": ok, "label": "Name matches" if ok else f"Name differs: {norm['name']}"})
     if norm["addresses"]:
-        keys = {_key(s, z) for s, z in known_addresses if s}
-        hit = any(_key(a.get("street"), a.get("zip")) in keys for a in norm["addresses"])
+        keys = {_key(st, z) for st, z in (_addr_pair(a) for a in known_addresses) if st}
+        hit = any(_key(*_addr_pair(a)) in keys for a in norm["addresses"])
         checks.append({"ok": hit, "label": "Address history includes the property or mailing address"
                        if hit else "Address history does NOT include the property or mailing address"})
     if norm["deceased"]:
@@ -145,5 +178,18 @@ def assess(first, last, norm, known_addresses):
 
 def run_trace(mode, req, first, last, known_addresses):
     resp = _http("POST", req["path"], req["body"])
-    norm = normalize(mode, resp)
-    return {"norm": norm, "checks": assess(first, last, norm, known_addresses), "response": resp}
+    # From here on we have a (possibly paid) answer: never let a parsing problem lose it.
+    try:
+        norm = normalize(mode, resp)
+    except Exception as e:
+        d = (resp or {}).get("data") or {}
+        norm = {"matched": bool(d.get("matchFound")), "credits": d.get("creditsCharged"), "phones": [],
+                "emails": [], "name": "", "addresses": [], "match_type": "", "deceased": None,
+                "age": None, "related": []}
+        return {"norm": norm, "response": resp,
+                "checks": [{"ok": False, "label": f"Could not read Ava's reply ({e}); see the raw response below"}]}
+    try:
+        checks = assess(first, last, norm, [(st, z) for st, z in known_addresses])
+    except Exception as e:
+        checks = [{"ok": False, "label": f"Match checks unavailable ({e})"}]
+    return {"norm": norm, "checks": checks, "response": resp}
