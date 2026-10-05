@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}Review skip trace - wh{% endblock %}
+{% block content %}
+<a href="/leads/{{ prop.id }}" class="back">&larr; Back to lead</a>
+<h1>Review before sending</h1>
+{% if credits %}<p class="subtle">Credits available: <b>{{ credits.availableCredits }}</b> (each credit is about 2 cents; a search with no match costs nothing)</p>{% endif %}
+<form method="post" action="/leads/{{ prop.id }}/skiptrace/preview" id="pf" class="reviewform">
+  <div class="inline-form">
+    <input name="first_name" value="{{ f }}" placeholder="First name" aria-label="First name">
+    <input name="last_name" value="{{ l }}" placeholder="Last name" aria-label="Last name">
+  </div>
+  <input type="hidden" name="mail_addr" value="{{ mailing.street or '' }}"><input type="hidden" name="mail_city" value="{{ mailing.city or '' }}">
+  <input type="hidden" name="mail_state" value="{{ mailing.state or '' }}"><input type="hidden" name="mail_zip" value="{{ mailing.zip or '' }}">
+  <h2>Search type</h2>
+  {% for key, label, cost in modes %}<label class="opt"><input type="radio" name="mode" value="{{ key }}" {{ 'checked' if mode == key }}> {{ label }} <span class="subtle">&middot; {{ cost }}</span></label>{% endfor %}
+  <h2>Which address to send</h2>
+  <label class="opt"><input type="radio" name="addr_choice" value="property" {{ 'checked' if choice == 'property' }}> Property: {{ prop.address_line }}, {{ prop.city }} {{ prop.state }} {{ prop.zip }}</label>
+  {% if has_mailing %}<label class="opt"><input type="radio" name="addr_choice" value="mailing" {{ 'checked' if choice == 'mailing' }}> Owner's mailing address: {{ mailing.street }}, {{ mailing.city }} {{ mailing.state }} {{ mailing.zip }}</label>{% endif %}
+  <h2>Exact request that will be sent</h2>
+  <pre class="json">{{ req.method }} {{ req.url }}
+Authorization: Bearer ****
+Content-Type: application/json
+
+{{ req.body|tojson(indent=2) }}</pre>
+  <div class="inline-form">
+    <button type="submit" class="ghost">Update preview</button>
+    <button type="submit" formaction="/leads/{{ prop.id }}/skiptrace" onclick="return confirm('Send this search to Ava? Credits are charged only if a match is found.')">Send to Ava</button>
+    <a href="/leads/{{ prop.id }}">Cancel</a>
+  </div>
+</form>
+{% endblock %}
