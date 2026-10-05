@@ -23,6 +23,8 @@ from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.templating import Jinja2Templates
 from supabase import create_client
 
+from skiptrace import NotConfigured, run_trace
+
 SUPABASE_URL = os.environ["SUPABASE_URL"]
 SUPABASE_KEY = os.environ["SUPABASE_KEY"]
 APP_PASSWORD = os.environ.get("APP_PASSWORD")  # required in production, see auth below
@@ -214,6 +216,10 @@ PRESETS = [
 ]
 PER_PAGE_CHOICES = (50, 100, 200)
 NON_FILTER_KEYS = {"sort", "direction", "page", "per"}
+FORM_FIELDS = {"q", "state", "lead_type", "auction_within", "county", "city", "zip", "subdivision",
+               "min_sqft", "max_sqft", "min_default", "max_default", "use_group", "starred", "has_arv",
+               "show_incomplete", "owner_occupied", "per", "sort", "direction", "page",
+               "min_market", "max_market", "min_arv", "max_arv", "min_equity", "max_equity"}
 
 
 def _num(v):
@@ -229,7 +235,7 @@ def _num(v):
 @app.get("/leads")
 def leads(request: Request, _: bool = Depends(require_auth)):
     qp = request.query_params
-    sort = qp.get("sort") if qp.get("sort") in LEAD_SORTS else "assessed_value"
+    sort = qp.get("sort") if qp.get("sort") in LEAD_SORTS else "market_value_estimate"
     direction = "asc" if qp.get("direction") == "asc" else "desc"
     per = int(qp["per"]) if qp.get("per", "").isdigit() and int(qp["per"]) in PER_PAGE_CHOICES else 50
     page = max(1, int(qp["page"])) if qp.get("page", "").isdigit() else 1
@@ -304,6 +310,7 @@ def leads(request: Request, _: bool = Depends(require_auth)):
         "sorts": LEAD_SORTS, "use_groups": USE_GROUPS, "presets": PRESETS,
         "per_choices": PER_PAGE_CHOICES, "chips": chips,
         "saved": saved, "cur_query": request.url.query,
+        "extra_params": [(k, v) for k, v in params if k not in FORM_FIELDS and v != ""],
         "page_qs": urlencode([p for p in params if p[0] != "page"]),
         "sort_qs": urlencode([p for p in params if p[0] not in ("sort", "direction", "page")]),
     })
@@ -325,6 +332,24 @@ def delete_search(search_id: str, _: bool = Depends(require_auth)):
 def save_notes(property_id: str, notes: str = Form(""), _: bool = Depends(require_auth)):
     supabase.table("wh_properties").update({"notes": notes[:5000]}).eq("id", property_id).execute()
     return {"ok": True}
+
+
+@app.post("/leads/{property_id}/skiptrace")
+def skip_trace(property_id: str, owner_name: str = Form(""), deep: str = Form(""),
+               _: bool = Depends(require_auth)):
+    prop = supabase.table("wh_properties").select("*").eq("id", property_id).single().execute().data
+    row = {"property_id": property_id, "owner_name": owner_name,
+           "search_type": "deep" if deep else "standard"}
+    try:
+        res = run_trace(prop, owner_name, deep=bool(deep))
+        row.update(status="found" if (res["phones"] or res["emails"]) else "no_match",
+                   phones=res["phones"], emails=res["emails"], raw=res.get("raw"))
+    except NotConfigured as e:
+        return RedirectResponse(f"/leads/{property_id}?trace_msg={quote(str(e))}", status_code=303)
+    except Exception as e:
+        row.update(status="error", raw={"error": str(e)})
+    supabase.table("wh_skip_traces").insert(row).execute()
+    return RedirectResponse(f"/leads/{property_id}", status_code=303)
 
 
 @app.post("/leads/{property_id}/star")
@@ -362,8 +387,16 @@ def lead_detail(request: Request, property_id: str, _: bool = Depends(require_au
         .order("contacted_at", desc=True).execute().data
     )
 
+    try:
+        traces = (supabase.table("wh_skip_traces").select("*").eq("property_id", property_id)
+                  .order("created_at", desc=True).execute().data)
+    except Exception:
+        traces = []
+
     return templates.TemplateResponse("lead_detail.html", {
         "request": request,
+        "traces": traces,
+        "trace_msg": request.query_params.get("trace_msg"),
         "prop": prop,
         "owners": owners,
         "vacancy_checks": vacancy_checks,
