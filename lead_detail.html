@@ -20,7 +20,7 @@
     <textarea id="notes" rows="3" placeholder="Notes on this house (calls, condition, what you found online)...">{{ prop.notes or "" }}</textarea>
     <div class="inline-form">
       <button type="button" id="savenotes">Save notes</button>
-      <button type="button" class="ghost" id="starbtn">{{ "&#9733; Starred" if prop.starred else "&#9734; Star this lead" }}</button>
+      <button type="button" class="ghost" id="starbtn">{% if prop.starred %}&#9733; Starred{% else %}&#9734; Star this lead{% endif %}</button>
       <span class="subtle" id="notemsg"></span>
     </div>
   </div>
@@ -86,6 +86,7 @@
           {% for r in t.raw.summary.related %}<div>{{ r.name }} <span class="subtle">{{ r.relationship or "" }}{{ " (deceased)" if r.deceased }}</span>
             {% for p in r.phones %}<a href="tel:{{ p.number }}">{{ p.number }}</a> {% endfor %}</div>{% endfor %}{% endif %}
         {% if t.raw and t.raw.request %}<details><summary class="subtle">Request sent</summary><pre>{{ t.raw.request|tojson(indent=2) }}</pre></details>{% endif %}
+        {% if t.raw and t.raw.response %}<details><summary class="subtle">Ava response (raw)</summary><pre>{{ t.raw.response|tojson(indent=2) }}</pre></details>{% endif %}
       </div>
       {% endfor %}
     </div>
