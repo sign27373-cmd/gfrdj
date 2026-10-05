@@ -21,7 +21,7 @@ import urllib.error
 import urllib.request
 
 BASE_URL = "https://app.avadata.ai/api/v1"
-API_KEY = os.environ.get("AVA_API_KEY")
+API_KEY = (os.environ.get("AVA_API_KEY") or "").strip()
 
 MODES = [
     ("phone", "Standard: phone only", "1 credit (2 cents) if a match is found"),
