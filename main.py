@@ -23,7 +23,9 @@ from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.templating import Jinja2Templates
 from supabase import create_client
 
-from skiptrace import NotConfigured, run_trace
+from names import parse_people
+from skiptrace import (MODES, AvaError, NotConfigured, build_request, default_address_choice,
+                       get_credits, pick_address, run_trace)
 
 SUPABASE_URL = os.environ["SUPABASE_URL"]
 SUPABASE_KEY = os.environ["SUPABASE_KEY"]
@@ -334,20 +336,55 @@ def save_notes(property_id: str, notes: str = Form(""), _: bool = Depends(requir
     return {"ok": True}
 
 
-@app.post("/leads/{property_id}/skiptrace")
-def skip_trace(property_id: str, owner_name: str = Form(""), deep: str = Form(""),
-               _: bool = Depends(require_auth)):
+def _trace_setup(property_id, mode, addr_choice, mail_addr, mail_city, mail_state, mail_zip, first_name, last_name):
     prop = supabase.table("wh_properties").select("*").eq("id", property_id).single().execute().data
-    row = {"property_id": property_id, "owner_name": owner_name,
-           "search_type": "deep" if deep else "standard"}
+    mailing = {"street": mail_addr, "city": mail_city, "state": mail_state, "zip": mail_zip}
+    mode = mode if mode in ("phone", "phone_email", "deep") else "phone"
+    choice = addr_choice or default_address_choice(mailing)
+    req = build_request(mode, first_name, last_name, *pick_address(prop, mailing, choice))
+    known = [(prop.get("address_line"), prop.get("zip")), (mail_addr, mail_zip)]
+    return prop, mailing, mode, choice, req, known
+
+
+@app.post("/leads/{property_id}/skiptrace/preview")
+def skip_trace_preview(request: Request, property_id: str, first_name: str = Form(""),
+                       last_name: str = Form(""), mode: str = Form("phone"), addr_choice: str = Form(""),
+                       mail_addr: str = Form(""), mail_city: str = Form(""), mail_state: str = Form(""),
+                       mail_zip: str = Form(""), _: bool = Depends(require_auth)):
+    prop, mailing, mode, choice, req, _k = _trace_setup(
+        property_id, mode, addr_choice, mail_addr, mail_city, mail_state, mail_zip, first_name, last_name)
+    return templates.TemplateResponse("skiptrace_preview.html", {
+        "request": request, "prop": prop, "req": req, "mode": mode, "choice": choice,
+        "mailing": mailing, "f": first_name, "l": last_name, "modes": MODES,
+        "credits": get_credits(), "has_mailing": bool((mail_addr or "").strip()),
+    })
+
+
+@app.post("/leads/{property_id}/skiptrace")
+def skip_trace(property_id: str, first_name: str = Form(""), last_name: str = Form(""),
+               mode: str = Form("phone"), addr_choice: str = Form(""), mail_addr: str = Form(""),
+               mail_city: str = Form(""), mail_state: str = Form(""), mail_zip: str = Form(""),
+               _: bool = Depends(require_auth)):
+    if not last_name.strip():
+        return RedirectResponse(f"/leads/{property_id}?trace_msg={quote('Last name is required.')}", status_code=303)
+    prop, mailing, mode, choice, req, known = _trace_setup(
+        property_id, mode, addr_choice, mail_addr, mail_city, mail_state, mail_zip, first_name, last_name)
+    row = {"property_id": property_id, "owner_name": f"{first_name} {last_name}".strip(), "search_type": mode}
     try:
-        res = run_trace(prop, owner_name, deep=bool(deep))
-        row.update(status="found" if (res["phones"] or res["emails"]) else "no_match",
-                   phones=res["phones"], emails=res["emails"], raw=res.get("raw"))
+        res = run_trace(mode, req, first_name, last_name, known)
+        n = res["norm"]
+        row.update(status="found" if n["matched"] else "no_match", phones=n["phones"], emails=n["emails"],
+                   raw={"request": {"method": req["method"], "url": req["url"], "body": req["body"]},
+                        "summary": {"checks": res["checks"], "related": n["related"], "name": n["name"],
+                                    "age": n["age"], "deceased": n["deceased"], "credits": n["credits"]},
+                        "response": res["response"]})
     except NotConfigured as e:
         return RedirectResponse(f"/leads/{property_id}?trace_msg={quote(str(e))}", status_code=303)
-    except Exception as e:
-        row.update(status="error", raw={"error": str(e)})
+    except AvaError as e:
+        row.update(status="error", raw={"request": {"method": req["method"], "url": req["url"], "body": req["body"]},
+                                        "error": e.message})
+        supabase.table("wh_skip_traces").insert(row).execute()
+        return RedirectResponse(f"/leads/{property_id}?trace_msg={quote(e.message)}", status_code=303)
     supabase.table("wh_skip_traces").insert(row).execute()
     return RedirectResponse(f"/leads/{property_id}", status_code=303)
 
@@ -387,6 +424,8 @@ def lead_detail(request: Request, property_id: str, _: bool = Depends(require_au
         .order("contacted_at", desc=True).execute().data
     )
 
+    for o in owners:
+        o["people"] = parse_people(o.get("full_name"))
     try:
         traces = (supabase.table("wh_skip_traces").select("*").eq("property_id", property_id)
                   .order("created_at", desc=True).execute().data)
