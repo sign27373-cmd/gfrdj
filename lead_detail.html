@@ -67,6 +67,8 @@
             <input type="hidden" name="mail_addr" value="{{ o.mailing_address or '' }}"><input type="hidden" name="mail_city" value="{{ o.mailing_city or '' }}">
             <input type="hidden" name="mail_state" value="{{ o.mailing_state or '' }}"><input type="hidden" name="mail_zip" value="{{ o.mailing_zip or '' }}">
             <button type="submit">Review &amp; trace</button>
+            {% set oq = ('"' ~ p.first ~ ' ' ~ p.last ~ '" obituary ' ~ (prop.city or '') ~ ' ' ~ (prop.state or ''))|urlencode %}
+            <a href="https://www.google.com/search?q={{ oq }}" target="_blank" rel="noopener" class="subtle">Obituary search</a>
           </form>
           {% endif %}
         {% endfor %}
