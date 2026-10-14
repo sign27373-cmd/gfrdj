@@ -1,12 +1,13 @@
 {% extends "base.html" %}
 {% block title %}Leads - wh{% endblock %}
-{% macro m(v) %}{{ "${:,.0f}".format(v) if v is not none else "" }}{% endmacro %}
+{% macro m(v) %}{{ "${:,.0f}".format(v) if v is number else "" }}{% endmacro %}
 {% macro th(col, label, cls="") %}<th class="{{ cls }}"><a href="/leads?{{ sort_qs }}{{ '&' if sort_qs }}sort={{ col }}&direction={{ 'asc' if sort == col and direction == 'desc' else 'desc' }}">{{ label }}{% if sort == col %} {{ '▼' if direction == 'desc' else '▲' }}{% endif %}</a></th>{% endmacro %}
-{% macro step(name, label) %}<div class="st"><small>{{ label }}</small><div class="stp"><button type="button" data-d="-25000" aria-label="minus 25 thousand">&minus;</button><input type="number" name="{{ name }}" step="25000" min="0" placeholder="Any" value="{{ qp.get(name,'') }}"><button type="button" data-d="25000" aria-label="plus 25 thousand">+</button></div></div>{% endmacro %}
+{% macro step(name, label) %}<div class="st"><small>{{ label }}</small><div class="stp"><button type="button" data-d="-25000" aria-label="minus 25 thousand">&minus;</button><input type="number" name="{{ name }}" step="any" min="0" placeholder="Any" value="{{ qp.get(name,'') }}"><button type="button" data-d="25000" aria-label="plus 25 thousand">+</button></div></div>{% endmacro %}
 {% macro links(p) %}{% set full = [p.address_line, p.city, p.state, p.zip]|select|join(' ') %}{% if p.address_line %}<span class="links"><a href="https://www.google.com/search?q={{ full|urlencode }}" target="_blank" rel="noopener">Google</a><a href="https://www.google.com/maps/search/?api=1&query={{ full|urlencode }}" target="_blank" rel="noopener">Maps</a><a href="https://www.zillow.com/homes/{{ full|replace(',', '')|replace(' ', '-')|urlencode }}_rb/" target="_blank" rel="noopener">Zillow</a></span>{% endif %}{% endmacro %}
 {% block content %}
-<form class="filters" id="ff" method="get" action="/leads">
+<form class="filters" id="ff" method="get" action="/leads" novalidate>
   <input type="hidden" name="sort" value="{{ sort }}"><input type="hidden" name="direction" value="{{ direction }}">
+  {% for k, v in extra_params %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endfor %}
   <div class="frow">
     <input type="text" name="q" class="search" placeholder="Search address or parcel ID" value="{{ qp.get('q','') }}">
     <button type="submit">Apply</button><button type="button" id="savesearch" class="ghost">Save search</button><a href="/leads" class="resetbtn">Reset all</a>
@@ -16,6 +17,10 @@
     <span class="gap"></span>
     <label class="pill"><input class="auto" type="radio" name="lead_type" value="" {{ 'checked' if not qp.get('lead_type') }}><span>All leads</span></label>
     <label class="pill"><input class="auto" type="radio" name="lead_type" value="pre_foreclosure" {{ 'checked' if qp.get('lead_type') == 'pre_foreclosure' }}><span>Pre-foreclosure</span></label>
+    <span class="gap"></span>
+    <label class="pill"><input class="auto" type="radio" name="traced" value="" {{ 'checked' if not qp.get('traced') }}><span>Any trace status</span></label>
+    <label class="pill"><input class="auto" type="radio" name="traced" value="yes" {{ 'checked' if qp.get('traced') == 'yes' }}><span>Skip traced</span></label>
+    <label class="pill"><input class="auto" type="radio" name="traced" value="no" {{ 'checked' if qp.get('traced') == 'no' }}><span>Not traced</span></label>
   </div>
   <details class="grp" open><summary>Value</summary>
     <div class="frow quick">
@@ -78,7 +83,7 @@
     <td class="prop"><div class="pw">
       <a href="/leads/{{ l.id }}" class="th">{% if l.photo %}<img src="{{ l.photo }}" loading="lazy" alt="" onerror="this.replaceWith(document.createTextNode('no photo'))">{% else %}no photo{% endif %}</a>
       <div class="ad"><a href="/leads/{{ l.id }}">{{ l.address_line or l.address_note or "(no address)" }}</a>
-        <span class="subtle"><span class="st-{{ l.state }}">{{ l.state }}</span> &middot; {{ l.city or "" }} {{ l.zip or "" }}</span>{{ links(l) }}</div>
+        <span class="subtle"><span class="st-{{ l.state }}">{{ l.state }}</span> &middot; {{ l.city or "" }} {{ l.zip or "" }}{% if l.skip_traced %} &middot; <span class="traced">traced</span>{% endif %}</span>{{ links(l) }}</div>
     </div></td>
     <td>{% if l.auction_date %}{{ l.auction_date[:10] }}{% if l.days_to_auction is not none %} <span class="badge {{ 'hot' if 0 <= l.days_to_auction <= 14 else 'past' if l.days_to_auction < 0 }}">{{ l.days_to_auction }}d</span>{% endif %}{% endif %}</td>
     <td class="num">{{ m(l.market_value_estimate) if l.market_value_estimate else "" }}</td>
@@ -93,7 +98,7 @@
 <div class="pager">
   {% if page > 1 %}<a href="/leads?{{ page_qs }}{{ '&' if page_qs }}page={{ page - 1 }}">&laquo; Prev</a>{% endif %}
   <span class="subtle">Page {{ page }} of {{ total_pages }}</span>
-  <span class="jump"><input type="number" id="jumpn" min="1" max="{{ total_pages }}" placeholder="Go to page"><button type="button" id="jumpbtn">Go</button></span>
+  <form class="jump" method="get" action="/leads">{% for k, v in page_params %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endfor %}<input type="number" name="page" min="1" max="{{ total_pages }}" placeholder="Go to page" required><button type="submit">Go</button></form>
   {% if page < total_pages %}<a href="/leads?{{ page_qs }}{{ '&' if page_qs }}page={{ page + 1 }}">Next &raquo;</a>{% endif %}
 </div>
 <script>
@@ -103,8 +108,6 @@ document.getElementById('savesearch').onclick=function(){var name=prompt('Name t
   fetch('/searches',{method:'POST',body:new URLSearchParams({name:name,query:q}),credentials:'same-origin'}).then(function(){location.reload()})};
 document.querySelectorAll('.delsearch').forEach(function(b){b.onclick=function(){if(!confirm('Delete this saved search?'))return;
   fetch('/searches/'+b.dataset.id+'/delete',{method:'POST',credentials:'same-origin'}).then(function(){location.reload()})}});
-document.getElementById('jumpbtn').onclick=function(){var n=parseInt(document.getElementById('jumpn').value,10);if(!n)return;n=Math.min(Math.max(1,n),{{ total_pages }});location.href='/leads?{{ page_qs }}{{ '&' if page_qs }}page='+n};
-document.getElementById('jumpn').addEventListener('keydown',function(e){if(e.key==='Enter')document.getElementById('jumpbtn').click()});
 document.querySelector('.leadtable').addEventListener('click',function(e){var b=e.target.closest('.star');if(!b)return;
   fetch('/leads/'+b.dataset.id+'/star',{method:'POST',credentials:'same-origin'}).then(function(r){return r.json()}).then(function(j){b.classList.toggle('on',j.starred)})});
 ff.addEventListener('change',function(e){if(e.target.classList.contains('auto'))ff.submit()});
