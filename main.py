@@ -214,6 +214,8 @@ RANGES = [("assessed", "assessed_value"), ("market", "market_value_estimate"),
 PRESETS = [
     ("All", ""),
     ("Starred", "starred=1"),
+    ("Skip traced", "traced=yes"),
+    ("Starred, not traced", "starred=1&traced=no"),
     ("Auctions in 30 days", "lead_type=pre_foreclosure&auction_within=30&sort=days_to_auction&direction=asc"),
     ("High equity NV", "state=NV&min_equity=100000&sort=estimated_equity&direction=desc"),
     ("Newest notices", "lead_type=pre_foreclosure&sort=notice_date&direction=desc"),
@@ -222,7 +224,7 @@ PER_PAGE_CHOICES = (50, 100, 200)
 NON_FILTER_KEYS = {"sort", "direction", "page", "per"}
 FORM_FIELDS = {"q", "state", "lead_type", "auction_within", "county", "city", "zip", "subdivision",
                "min_sqft", "max_sqft", "min_default", "max_default", "use_group", "starred", "has_arv",
-               "show_incomplete", "owner_occupied", "per", "sort", "direction", "page",
+               "show_incomplete", "owner_occupied", "per", "sort", "direction", "page", "traced",
                "min_market", "max_market", "min_arv", "max_arv", "min_equity", "max_equity"}
 
 
@@ -248,7 +250,7 @@ def leads(request: Request, _: bool = Depends(require_auth)):
         "id, state, county, address_line, address_note, city, zip, use_group, lead_type, "
         "auction_date, days_to_auction, assessed_value, market_value_estimate, arv_estimate, "
         "arv_method, estimated_equity, equity_pct, opening_bid, bid_pct_arv, "
-        "amount_in_default, living_sqft, owner_occupied, starred, zip_bottom_tier, zip_sfr_value, zip_rent",
+        "amount_in_default, living_sqft, owner_occupied, starred, skip_traced, zip_bottom_tier, zip_sfr_value, zip_rent",
         count="exact",
     )
     states = [x for x in qp.getlist("state") if x]
@@ -274,6 +276,8 @@ def leads(request: Request, _: bool = Depends(require_auth)):
     within = _num(qp.get("auction_within"))
     if within is not None:
         query = query.gte("days_to_auction", 0).lte("days_to_auction", within)
+    if qp.get("traced") in ("yes", "no"):
+        query = query.eq("skip_traced", qp["traced"] == "yes")
     if qp.get("starred") == "1":
         query = query.eq("starred", True)
     if qp.get("has_arv") == "1":
@@ -314,6 +318,7 @@ def leads(request: Request, _: bool = Depends(require_auth)):
         "sorts": LEAD_SORTS, "use_groups": USE_GROUPS, "presets": PRESETS,
         "per_choices": PER_PAGE_CHOICES, "chips": chips,
         "saved": saved, "cur_query": request.url.query,
+        "page_params": [p for p in params if p[0] != "page" and p[1] != ""],
         "extra_params": [(k, v) for k, v in params if k not in FORM_FIELDS and v != ""],
         "page_qs": urlencode([p for p in params if p[0] != "page"]),
         "sort_qs": urlencode([p for p in params if p[0] not in ("sort", "direction", "page")]),
