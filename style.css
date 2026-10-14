@@ -85,3 +85,7 @@ pre,.json{background:var(--panel);border:1px solid var(--line);border-radius:8px
 .opt{display:block;margin:6px 0}.opt input{width:auto;margin-right:6px}
 .tracebox .ok{color:#7dd3c0}.tracebox .bad{color:#e8c46a}
 .reviewform{max-width:720px}
+
+.traced{color:#7dd3c0}
+.foot{text-align:center;color:var(--line);font-size:11px;padding:24px}
+form.jump{display:inline-flex}
