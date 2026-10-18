@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}{{ prop.address_line or "Lead" }} - wh{% endblock %}
 {% block content %}
-  <a href="/leads" class="back" onclick="if(history.length>1){history.back();return false}">&laquo; Back to leads</a>
+  <a href="/leads{{ '?' + back_qs if back_qs }}" class="back">&laquo; Back to leads</a>
   <h1>{{ prop.address_line or "(no address)" }}</h1>
   <p class="subtle">{{ prop.city }}, {{ prop.state }} {{ prop.zip or "" }} &middot; parcel {{ prop.parcel_id or "unknown" }}</p>
   {% set full = [prop.address_line, prop.city, prop.state, prop.zip]|select|join(' ') %}
@@ -117,6 +117,25 @@
     {% endif %}
   </section>
 
+  <section class="textpanel" data-address="{{ prop.address_line or '' }}" data-city="{{ prop.city or '' }}">
+    <h2>Text</h2>
+    {% if text_people %}
+    <div class="inline-form">
+      <select id="tp_person">{% for p in text_people %}<option data-first="{{ p.first }}" data-last="{{ p.last }}" data-phones='{{ p.phones|tojson }}'>{{ p.name }}</option>{% endfor %}</select>
+      <select id="tp_phone"></select>
+      <select id="tp_tpl"><option value="">Pick a template...</option>{% for t in text_tpls %}<option value="{{ t.name }}" data-body="{{ t.body }}">{{ t.name }}</option>{% endfor %}</select>
+    </div>
+    <textarea id="tp_msg" rows="4" placeholder="Message..." style="width:100%"></textarea>
+    <p class="subtle"><span id="tp_count">0</span> characters <span id="tp_warn" class="warnline"></span></p>
+    <div class="inline-form">
+      <button type="button" id="tp_num">Copy number</button>
+      <button type="button" id="tp_copy">Copy message</button>
+      <button type="button" class="ghost" id="tp_sent">Mark as sent</button>
+      <a href="/texts" class="subtle">Edit templates</a>
+    </div>
+    {% else %}<p class="subtle">Skip trace an owner to get a number to text. <a href="/texts">Edit templates</a></p>{% endif %}
+  </section>
+
   <section>
     <h2>Contact log</h2>
     <form method="post" action="/leads/{{ prop.id }}/log" class="inline-form">
@@ -170,5 +189,20 @@ document.getElementById('savenotes').onclick=function(){
 document.getElementById('starbtn').onclick=function(){var b=this;
   fetch('/leads/{{ prop.id }}/star',{method:'POST',credentials:'same-origin'}).then(function(r){return r.json()})
    .then(function(j){b.innerHTML=j.starred?'&#9733; Starred':'&#9734; Star this lead'})};
+</script>
+<script>
+(function(){var p=document.querySelector('.textpanel');if(!p||!document.getElementById('tp_person'))return;
+ var per=document.getElementById('tp_person'),ph=document.getElementById('tp_phone'),tpl=document.getElementById('tp_tpl'),msg=document.getElementById('tp_msg');
+ function phones(){ph.innerHTML='';var o=per.options[per.selectedIndex],list=JSON.parse(o.dataset.phones||'[]');
+  if(!list.length){ph.innerHTML='<option value="">no number</option>'}list.forEach(function(n){var x=document.createElement('option');x.value=n;x.textContent=n;ph.appendChild(x)})}
+ function count(){document.getElementById('tp_count').textContent=msg.value.length;
+  document.getElementById('tp_warn').textContent=/[^\x00-\x7F]/.test(msg.value)?'- fancy quotes or emoji can make this count as several texts':''}
+ function fill(){var o=tpl.options[tpl.selectedIndex],po=per.options[per.selectedIndex];if(!o||!o.dataset.body)return;
+  msg.value=whFill(o.dataset.body,{first_name:po.dataset.first,last_name:po.dataset.last,address:p.dataset.address,city:p.dataset.city});count()}
+ per.onchange=function(){phones();fill()};tpl.onchange=fill;msg.oninput=count;phones();
+ document.getElementById('tp_num').onclick=function(){whCopy(whPhone(ph.value))};
+ document.getElementById('tp_copy').onclick=function(){whCopy(msg.value)};
+ document.getElementById('tp_sent').onclick=function(){if(!ph.value){whToast('No number selected');return}
+  fetch('/leads/{{ prop.id }}/text-sent',{method:'POST',body:new URLSearchParams({template:tpl.value,phone:ph.value}),credentials:'same-origin'}).then(function(){location.reload()})};})();
 </script>
 {% endblock %}
