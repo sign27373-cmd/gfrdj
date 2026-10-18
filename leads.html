@@ -21,6 +21,10 @@
     <label class="pill"><input class="auto" type="radio" name="traced" value="" {{ 'checked' if not qp.get('traced') }}><span>Any trace status</span></label>
     <label class="pill"><input class="auto" type="radio" name="traced" value="yes" {{ 'checked' if qp.get('traced') == 'yes' }}><span>Skip traced</span></label>
     <label class="pill"><input class="auto" type="radio" name="traced" value="no" {{ 'checked' if qp.get('traced') == 'no' }}><span>Not traced</span></label>
+    <span class="gap"></span>
+    <label class="pill"><input class="auto" type="radio" name="contacted" value="" {{ 'checked' if not qp.get('contacted') }}><span>Any contact status</span></label>
+    <label class="pill"><input class="auto" type="radio" name="contacted" value="yes" {{ 'checked' if qp.get('contacted') == 'yes' }}><span>Contacted</span></label>
+    <label class="pill"><input class="auto" type="radio" name="contacted" value="no" {{ 'checked' if qp.get('contacted') == 'no' }}><span>Not contacted</span></label>
   </div>
   <details class="grp" open><summary>Value</summary>
     <div class="frow quick">
@@ -65,6 +69,7 @@
   </details>
 </form>
 
+{% if resume %}<div class="chips"><a href="/leads?{{ resume }}">&#8635; Resume my last filters</a></div>{% endif %}
 <div class="tabs">
   {% for label, qs in presets %}<a href="/leads{{ '?' + qs if qs }}" class="{{ 'on' if request.url.query == qs }}">{{ label }}</a>{% endfor %}
   {% for s in saved %}<span class="savedtab {{ 'on' if cur_query == s.query }}"><a href="/leads{{ '?' + s.query if s.query }}">{{ s.name }}</a><button type="button" class="delsearch" data-id="{{ s.id }}" aria-label="Delete saved search">&times;</button></span>{% endfor %}
@@ -74,7 +79,7 @@
 
 <table class="data leadtable">
   <thead><tr>
-    <th></th><th>Property</th>{{ th('auction_date', 'Auction') }}{{ th('market_value_estimate', 'Market value', 'num') }}{{ th('zip_bottom_tier', 'Low-end ZIP', 'num') }}{{ th('arv_estimate', 'ARV', 'num') }}{{ th('estimated_equity', 'Equity', 'num') }}
+    <th></th><th>Property</th><th>Owner &amp; contact</th>{{ th('auction_date', 'Auction') }}{{ th('market_value_estimate', 'Market', 'num') }}{{ th('arv_estimate', 'ARV', 'num') }}{{ th('estimated_equity', 'Equity', 'num') }}
   </tr></thead>
   <tbody>
   {% for l in leads %}
@@ -83,11 +88,20 @@
     <td class="prop"><div class="pw">
       <a href="/leads/{{ l.id }}" class="th">{% if l.photo %}<img src="{{ l.photo }}" loading="lazy" alt="" onerror="this.replaceWith(document.createTextNode('no photo'))">{% else %}no photo{% endif %}</a>
       <div class="ad"><a href="/leads/{{ l.id }}">{{ l.address_line or l.address_note or "(no address)" }}</a>
-        <span class="subtle"><span class="st-{{ l.state }}">{{ l.state }}</span> &middot; {{ l.city or "" }} {{ l.zip or "" }}{% if l.skip_traced %} &middot; <span class="traced">traced</span>{% endif %}</span>{{ links(l) }}</div>
+        <span class="subtle"><span class="st-{{ l.state }}">{{ l.state }}</span> &middot; {{ l.city or "" }} {{ l.zip or "" }} &middot; {{ l.use_group }}</span>{{ links(l) }}</div>
     </div></td>
+    <td class="oc">
+      {% if l.people %}
+        {% for p in l.people[:2] %}<div class="pl"><b>{{ p.name }}</b>
+          {% if p.phones %}{% for ph in p.phones[:2] %}<a href="tel:{{ ph }}" class="ph">{{ ph }}</a>{% endfor %}{% elif p.matched %}<span class="subtle">no number</span>{% else %}<span class="subtle">no match</span>{% endif %}</div>{% endfor %}
+      {% else %}
+        <div class="pl subtle">{{ l.owners|join(' &middot; ') if l.owners else 'No owner on file' }}</div>
+        <div class="pl"><span class="badge">Not traced</span></div>
+      {% endif %}
+      <div class="cs">{% if l.last_contact %}<span class="badge ok">Contacted</span> {{ l.last_contact.channel }}{% if l.last_contact.outcome %} &middot; {{ l.last_contact.outcome|replace('_', ' ') }}{% endif %} &middot; {{ l.last_contact.contacted_at[:10] }}{% if l.contact_count > 1 %} ({{ l.contact_count }}x){% endif %}{% else %}<span class="badge">Not contacted</span>{% endif %}</div>
+    </td>
     <td>{% if l.auction_date %}{{ l.auction_date[:10] }}{% if l.days_to_auction is not none %} <span class="badge {{ 'hot' if 0 <= l.days_to_auction <= 14 else 'past' if l.days_to_auction < 0 }}">{{ l.days_to_auction }}d</span>{% endif %}{% endif %}</td>
     <td class="num">{{ m(l.market_value_estimate) if l.market_value_estimate else "" }}</td>
-    <td class="num subtle" title="Typical value of lower-priced homes in this ZIP (Zillow Research)">{{ m(l.zip_bottom_tier) }}</td>
     <td class="num">{{ m(l.arv_estimate) }}{% if l.arv_method %} <span class="dot dot-{{ l.arv_method }}" title="ARV from {{ l.arv_method }} comps"></span>{% endif %}</td>
     <td class="num">{{ m(l.estimated_equity) }}{% if l.equity_pct is not none %}<small class="subtle"> {{ l.equity_pct }}%</small>{% endif %}</td>
   </tr>
