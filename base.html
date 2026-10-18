@@ -4,9 +4,10 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}wh dashboard{% endblock %}</title>
+  <script>document.documentElement.dataset.theme=localStorage.getItem('wh-theme')||'violet'</script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap">
-  <link rel="stylesheet" href="/style.css?v=10">
+  <link rel="stylesheet" href="/style.css?v=11">
 </head>
 <body>
   <header class="topbar">
@@ -14,12 +15,19 @@
     <nav>
       <a href="/">Dashboard</a>
       <a href="/leads">Leads</a>
+      <a href="/texts">Texts</a>
       <a href="/pipeline">Pipeline</a>
     </nav>
+    <span class="themes" aria-label="Color theme">
+      <button type="button" data-settheme="violet" title="Violet">&#9679;</button>
+      <button type="button" data-settheme="blue" title="Blue">&#9679;</button>
+      <button type="button" data-settheme="dark" title="Dark">&#9679;</button>
+    </span>
   </header>
   <main>
     {% block content %}{% endblock %}
   </main>
-<footer class="foot">version r10</footer>
+  <footer class="foot">version r11</footer>
+  <script src="/app.js?v=11"></script>
 </body>
 </html>
