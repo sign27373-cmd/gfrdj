@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}Texts - wh{% endblock %}
+{% block content %}
+<h1>Texts</h1>
+<p class="subtle">The dashboard prepares the message; you send it from your texting app, then mark it sent. Fields: {first_name} {last_name} {address} {city}. Add your opt-out line (for example "Reply STOP to opt out") to your templates.</p>
+
+<section class="card">
+  <h2>Message templates</h2>
+  <form method="post" action="/texts/templates" class="tplform">
+    <input name="name" placeholder="Template name (e.g. First text)" required>
+    <textarea name="body" id="newbody" rows="3" placeholder="Hi {first_name}, I'm interested in buying {address}. Is it still yours? Reply STOP to opt out." required></textarea>
+    <div class="inline-form"><button type="submit">Save template</button><span class="subtle"><span id="newcount">0</span> characters <span id="newwarn" class="warnline"></span></span></div>
+  </form>
+  {% for t in tpls %}
+  <div class="tplcard"><div><b>{{ t.name }}</b><p class="subtle">{{ t.body }}</p></div>
+    <form method="post" action="/texts/templates/{{ t.id }}/delete" onsubmit="return confirm('Delete this template?')"><button class="ghost" type="submit">Delete</button></form></div>
+  {% else %}<p class="subtle">No templates yet.</p>{% endfor %}
+</section>
+
+<section class="card">
+  <h2>Send queue <span class="subtle">skip traced, not yet contacted</span></h2>
+  <div class="inline-form">
+    <select id="qtpl"><option value="">Pick a template...</option>{% for t in tpls %}<option value="{{ t.name }}" data-body="{{ t.body }}">{{ t.name }}</option>{% endfor %}</select>
+    <span class="subtle">{{ queue|length }} leads with a number</span>
+  </div>
+  <table class="data">
+    <thead><tr><th>Lead</th><th>Number</th><th>Message</th><th></th></tr></thead>
+    <tbody>
+    {% for r in queue %}
+      {% set p = (r.people|selectattr('phones')|list)[0] %}
+      <tr class="qrow" data-id="{{ r.id }}" data-first="{{ p.first }}" data-last="{{ p.last }}" data-address="{{ r.address_line or '' }}" data-city="{{ r.city or '' }}">
+        <td><a href="/leads/{{ r.id }}">{{ r.address_line or '(no address)' }}</a><span class="subtle" style="display:block">{{ p.name }} &middot; {{ r.city or '' }} {{ r.state }}</span></td>
+        <td><select class="qphone">{% for ph in p.phones %}<option value="{{ ph }}">{{ ph }}</option>{% endfor %}</select></td>
+        <td><div class="qmsg subtle">Pick a template above</div></td>
+        <td class="qbtns"><button type="button" class="qnum">Copy number</button> <button type="button" class="qcopy">Copy message</button> <button type="button" class="ghost qsent">Sent</button></td>
+      </tr>
+    {% else %}<tr><td colspan="4" class="subtle">Nothing in the queue. Skip trace some leads first.</td></tr>{% endfor %}
+    </tbody>
+  </table>
+</section>
+
+<script>
+(function(){
+ var nb=document.getElementById('newbody');
+ function nc(){document.getElementById('newcount').textContent=nb.value.length;document.getElementById('newwarn').textContent=/[^\x00-\x7F]/.test(nb.value)?'- fancy quotes or emoji can make this count as several texts':''}
+ nb.oninput=nc;nc();
+ var q=document.getElementById('qtpl');
+ function render(){var o=q.options[q.selectedIndex],body=o&&o.dataset.body;
+  document.querySelectorAll('.qrow').forEach(function(r){var m=r.querySelector('.qmsg');
+   if(!body){m.textContent='Pick a template above';m.className='qmsg subtle';return}
+   m.textContent=whFill(body,{first_name:r.dataset.first,last_name:r.dataset.last,address:r.dataset.address,city:r.dataset.city});m.className='qmsg'})}
+ q.onchange=render;
+ document.querySelector('.data').addEventListener('click',function(e){
+  var r=e.target.closest('.qrow');if(!r)return;var ph=r.querySelector('.qphone').value;
+  if(e.target.closest('.qnum'))whCopy(whPhone(ph));
+  else if(e.target.closest('.qcopy')){var t=r.querySelector('.qmsg');whCopy(t.classList.contains('subtle')?'':t.textContent)}
+  else if(e.target.closest('.qsent')){
+   fetch('/leads/'+r.dataset.id+'/text-sent',{method:'POST',body:new URLSearchParams({template:q.value,phone:ph}),credentials:'same-origin'})
+    .then(function(){r.remove();whToast('Logged as sent')})}});
+})();
+</script>
+{% endblock %}
