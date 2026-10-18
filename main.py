@@ -14,7 +14,7 @@ import re
 import secrets
 import time
 from pathlib import Path
-from urllib.parse import quote, urlencode
+from urllib.parse import quote, unquote, urlencode
 from datetime import datetime, timezone
 
 from fastapi import BackgroundTasks, Depends, FastAPI, Form, HTTPException, Request
@@ -196,6 +196,60 @@ def dashboard(request: Request, _: bool = Depends(require_auth)):
 
 TRACE_TABLE = "wh_skip_trace_results"
 
+
+def trace_people(traces):
+    """Skip-traced people (newest first) with their phone numbers."""
+    people, seen = [], set()
+    for t in traces:
+        if t.get("status") not in ("found", "no_match"):
+            continue
+        name = (t.get("owner_name") or "").strip()
+        if not name or name in seen:
+            continue
+        seen.add(name)
+        parts = name.split()
+        phones = [p.get("number") for p in (t.get("phones") or []) if isinstance(p, dict) and p.get("number")]
+        people.append({"name": name, "first": parts[0], "last": parts[-1] if len(parts) > 1 else "",
+                       "phones": phones, "matched": t.get("status") == "found"})
+    return people
+
+
+def enrich_rows(rows):
+    """Attach owners, skip-traced people and last contact to each list row (3 batched queries)."""
+    ids = [r["id"] for r in rows]
+    if not ids:
+        return
+
+    def grab(table, cols, order=None):
+        try:
+            q = supabase.table(table).select(cols).in_("property_id", ids)
+            if order:
+                q = q.order(order, desc=True)
+            return q.execute().data
+        except Exception:
+            return []
+
+    owners, traces, contacts = {}, {}, {}
+    for o in grab("wh_owners", "property_id, full_name"):
+        owners.setdefault(o["property_id"], []).append(o.get("full_name"))
+    for t in grab(TRACE_TABLE, "property_id, owner_name, phones, status, created_at", "created_at"):
+        traces.setdefault(t["property_id"], []).append(t)
+    for c in grab("wh_contact_log", "property_id, channel, outcome, contacted_at", "contacted_at"):
+        contacts.setdefault(c["property_id"], []).append(c)
+    for r in rows:
+        cl = contacts.get(r["id"], [])
+        r["owners"] = [n for n in owners.get(r["id"], []) if n]
+        r["people"] = trace_people(traces.get(r["id"], []))
+        r["last_contact"] = cl[0] if cl else None
+        r["contact_count"] = len(cl)
+
+
+def get_text_templates():
+    try:
+        return supabase.table("wh_text_templates").select("*").order("created_at").execute().data
+    except Exception:
+        return []
+
 LEAD_SORTS = {
     "assessed_value": "Assessed", "market_value_estimate": "Market", "arv_estimate": "ARV",
     "estimated_equity": "Equity", "equity_pct": "Equity %", "bid_pct_arv": "Bid % of ARV",
@@ -215,6 +269,7 @@ PRESETS = [
     ("All", ""),
     ("Starred", "starred=1"),
     ("Skip traced", "traced=yes"),
+    ("Traced, not contacted", "traced=yes&contacted=no"),
     ("Starred, not traced", "starred=1&traced=no"),
     ("Auctions in 30 days", "lead_type=pre_foreclosure&auction_within=30&sort=days_to_auction&direction=asc"),
     ("High equity NV", "state=NV&min_equity=100000&sort=estimated_equity&direction=desc"),
@@ -224,7 +279,7 @@ PER_PAGE_CHOICES = (50, 100, 200)
 NON_FILTER_KEYS = {"sort", "direction", "page", "per"}
 FORM_FIELDS = {"q", "state", "lead_type", "auction_within", "county", "city", "zip", "subdivision",
                "min_sqft", "max_sqft", "min_default", "max_default", "use_group", "starred", "has_arv",
-               "show_incomplete", "owner_occupied", "per", "sort", "direction", "page", "traced",
+               "show_incomplete", "owner_occupied", "per", "sort", "direction", "page", "traced", "contacted",
                "min_market", "max_market", "min_arv", "max_arv", "min_equity", "max_equity"}
 
 
@@ -250,7 +305,7 @@ def leads(request: Request, _: bool = Depends(require_auth)):
         "id, state, county, address_line, address_note, city, zip, use_group, lead_type, "
         "auction_date, days_to_auction, assessed_value, market_value_estimate, arv_estimate, "
         "arv_method, estimated_equity, equity_pct, opening_bid, bid_pct_arv, "
-        "amount_in_default, living_sqft, owner_occupied, starred, skip_traced, zip_bottom_tier, zip_sfr_value, zip_rent",
+        "amount_in_default, living_sqft, owner_occupied, starred, skip_traced, contacted, zip_bottom_tier, zip_sfr_value, zip_rent",
         count="exact",
     )
     states = [x for x in qp.getlist("state") if x]
@@ -278,6 +333,8 @@ def leads(request: Request, _: bool = Depends(require_auth)):
         query = query.gte("days_to_auction", 0).lte("days_to_auction", within)
     if qp.get("traced") in ("yes", "no"):
         query = query.eq("skip_traced", qp["traced"] == "yes")
+    if qp.get("contacted") in ("yes", "no"):
+        query = query.eq("contacted", qp["contacted"] == "yes")
     if qp.get("starred") == "1":
         query = query.eq("starred", True)
     if qp.get("has_arv") == "1":
@@ -293,6 +350,7 @@ def leads(request: Request, _: bool = Depends(require_auth)):
     total = result.count or 0
     for row in result.data:
         row["photo"] = photo_url_for(row)
+    enrich_rows(result.data)
 
     soon = (supabase.table("wh_leads_v").select("id", count="exact")
             .gte("days_to_auction", 0).lte("days_to_auction", 14).limit(1).execute().count or 0)
@@ -311,18 +369,23 @@ def leads(request: Request, _: bool = Depends(require_auth)):
         rest = params[:i] + params[i + 1:]
         chips.append((f"{k.replace('_', ' ')}: {v}", "/leads?" + urlencode(rest)))
 
-    return templates.TemplateResponse("leads.html", {
+    response = templates.TemplateResponse("leads.html", {
         "request": request, "leads": result.data, "qp": qp, "states": states, "groups": groups,
         "sort": sort, "direction": direction, "per": per, "page": page,
         "total": total, "total_pages": max(1, (total + per - 1) // per), "soon": soon,
         "sorts": LEAD_SORTS, "use_groups": USE_GROUPS, "presets": PRESETS,
         "per_choices": PER_PAGE_CHOICES, "chips": chips,
         "saved": saved, "cur_query": request.url.query,
+        "resume": unquote(request.cookies.get("lastlist", "")) if not request.url.query else "",
         "page_params": [p for p in params if p[0] != "page" and p[1] != ""],
         "extra_params": [(k, v) for k, v in params if k not in FORM_FIELDS and v != ""],
         "page_qs": urlencode([p for p in params if p[0] != "page"]),
         "sort_qs": urlencode([p for p in params if p[0] not in ("sort", "direction", "page")]),
     })
+    if request.url.query:
+        response.set_cookie("lastlist", quote(request.url.query, safe=""), max_age=60 * 60 * 24 * 30,
+                            httponly=True, samesite="lax")
+    return response
 
 
 @app.post("/searches")
@@ -452,6 +515,9 @@ def lead_detail(request: Request, property_id: str, _: bool = Depends(require_au
     return templates.TemplateResponse("lead_detail.html", {
         "request": request,
         "traces": traces,
+        "back_qs": unquote(request.cookies.get("lastlist", "")),
+        "text_tpls": get_text_templates(),
+        "text_people": trace_people(traces),
         "trace_msg": request.query_params.get("trace_msg"),
         "prop": prop,
         "owners": owners,
@@ -496,6 +562,46 @@ def add_contact_log(
         "notes": notes or None,
     }).execute()
     return RedirectResponse(url=f"/leads/{property_id}", status_code=303)
+
+
+@app.get("/texts")
+def texts_page(request: Request, _: bool = Depends(require_auth)):
+    try:
+        rows = (supabase.table("wh_leads_v").select("id, address_line, city, state, zip, starred")
+                .eq("skip_traced", True).eq("contacted", False)
+                .order("starred", desc=True).limit(80).execute().data)
+    except Exception:
+        rows = []
+    enrich_rows(rows)
+    queue = [r for r in rows if any(p["phones"] for p in r["people"])]
+    return templates.TemplateResponse("texts.html", {
+        "request": request, "tpls": get_text_templates(), "queue": queue})
+
+
+@app.post("/texts/templates")
+def add_text_template(name: str = Form(...), body: str = Form(...), _: bool = Depends(require_auth)):
+    supabase.table("wh_text_templates").insert({"name": name.strip()[:60], "body": body.strip()[:1000]}).execute()
+    return RedirectResponse("/texts", status_code=303)
+
+
+@app.post("/texts/templates/{tid}/delete")
+def delete_text_template(tid: str, _: bool = Depends(require_auth)):
+    supabase.table("wh_text_templates").delete().eq("id", tid).execute()
+    return RedirectResponse("/texts", status_code=303)
+
+
+@app.post("/leads/{property_id}/text-sent")
+def text_sent(property_id: str, template: str = Form(""), phone: str = Form(""),
+              _: bool = Depends(require_auth)):
+    supabase.table("wh_contact_log").insert({
+        "property_id": property_id, "channel": "text", "outcome": None,
+        "notes": f"Template: {template or '-'} | to {phone}"}).execute()
+    return {"ok": True}
+
+
+@app.get("/app.js", include_in_schema=False)
+def app_js():
+    return FileResponse(BASE_DIR / "app.js", media_type="application/javascript")
 
 
 @app.get("/pipeline")
